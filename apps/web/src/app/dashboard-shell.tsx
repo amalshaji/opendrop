@@ -69,7 +69,7 @@ export function DashboardShell({
         <Sidebar collapsible="none" className="appSidebar">
           <SidebarHeader className="sidebarHeader">
             <div className="brand">
-              <span className="brandMark">O</span>
+              <span className="brandMark"><img src="/opendrop-logo.svg" alt="" /></span>
               <span>OpenDrop</span>
             </div>
           </SidebarHeader>

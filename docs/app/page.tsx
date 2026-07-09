@@ -48,7 +48,7 @@ export default function Home() {
     <main className="siteShell">
       <nav className="nav">
         <Link className="docsBrand" href="/">
-          <span className="docsBrandMark">O</span>
+          <span className="docsBrandMark"><img src="/opendrop-logo.svg" alt="" /></span>
           OpenDrop
         </Link>
         <div className="navLinks">

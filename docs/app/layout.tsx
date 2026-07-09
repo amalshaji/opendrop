@@ -5,7 +5,12 @@ import "./style.css";
 
 export const metadata: Metadata = {
   title: "OpenDrop",
-  description: "Open-source static preview drops with versioning, CLI publishing, and a full-screen review room for comments and highlights."
+  description: "Open-source static preview drops with versioning, CLI publishing, and a full-screen review room for comments and highlights.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/opendrop-logo.svg"
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

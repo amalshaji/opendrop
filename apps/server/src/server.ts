@@ -28,9 +28,10 @@ app.get("/assets/:path{.+}", async (c) => {
   if (!path.success) return c.notFound();
   return serveBuiltFile(path.data, "assets");
 });
+app.get("/favicon.svg", async () => serveWebRootFile("favicon.svg"));
+app.get("/opendrop-logo.svg", async () => serveWebRootFile("opendrop-logo.svg"));
 app.get("/favicon.ico", async () => {
-  const response = await serveBuiltFile("favicon.ico");
-  return response.status === 404 ? new Response(null, { status: 204 }) : response;
+  return serveWebRootFile("favicon.svg");
 });
 registerDeploymentPageRoutes(app, {
   ...services,
@@ -67,4 +68,23 @@ async function serveBuiltFile(path: string, prefix?: string): Promise<Response> 
       "cache-control": "public, max-age=31536000, immutable"
     }
   });
+}
+
+async function serveWebRootFile(path: string): Promise<Response> {
+  if (serverEnv.OPENDROP_WEB_DEV_URL) {
+    const devServerUrl = serverEnv.OPENDROP_WEB_DEV_URL.replace(/\/$/, "");
+    try {
+      const response = await fetch(`${devServerUrl}/${path}`);
+      if (!response.ok || !response.body) return new Response("Not found", { status: response.status });
+      return new Response(response.body, {
+        headers: {
+          "content-type": response.headers.get("content-type") ?? contentTypeForPath(path),
+          "cache-control": "no-store"
+        }
+      });
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
+  }
+  return serveBuiltFile(path);
 }

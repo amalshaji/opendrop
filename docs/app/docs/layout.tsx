@@ -11,7 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         nav={{
           title: (
             <span className="docsBrand">
-              <span className="docsBrandMark">O</span>
+              <span className="docsBrandMark"><img src="/opendrop-logo.svg" alt="" /></span>
               OpenDrop
             </span>
           ),

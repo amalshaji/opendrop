@@ -22,7 +22,7 @@ export function AuthLanding({ loading = false, session, devAuthEmail, setDevAuth
       <main className="authPage">
         <section className="authHero" aria-label="OpenDrop sign in">
           <div className="authBrand">
-            <span className="brandMark">O</span>
+            <span className="brandMark"><img src="/opendrop-logo.svg" alt="" /></span>
             <span>OpenDrop</span>
           </div>
           <div className="authCopy">
