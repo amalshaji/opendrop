@@ -1,7 +1,4 @@
----
-title: Storage
-description: Database and object storage responsibilities in self-hosted and Cloudflare deployments.
----
+# Storage Model
 
 OpenDrop splits metadata and artifact bytes.
 
