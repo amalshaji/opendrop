@@ -2,6 +2,7 @@ const serverPort = process.env.OPENDROP_E2E_SERVER_PORT || "43300";
 const externalServerUrl = process.env.OPENDROP_E2E_SERVER_URL;
 const serverUrl = externalServerUrl || `http://127.0.0.1:${serverPort}`;
 const composeFile = "docker-compose.e2e.yml";
+const verboseCompose = ["1", "true"].includes((process.env.OPENDROP_E2E_COMPOSE_VERBOSE || "").toLowerCase());
 
 const suites: Record<string, string[]> = {
   all: ["tests/e2e/cli.spec.ts", "tests/e2e/ui.spec.ts", "tests/e2e/matrix.spec.ts"],
@@ -19,22 +20,49 @@ if (!selectedSpecs) {
 
 let shuttingDown = false;
 
-async function run(command: string[], env: Bun.Env = process.env) {
-  const child = Bun.spawn(command, { env, stdout: "inherit", stderr: "inherit" });
-  const code = await child.exited;
+async function readOutput(stream: ReadableStream<Uint8Array> | null) {
+  return stream ? await new Response(stream).text() : "";
+}
+
+async function run(command: string[], env: Bun.Env = process.env, quiet = false) {
+  const captureOutput = quiet && !verboseCompose;
+  const child = Bun.spawn(command, {
+    env,
+    stdout: captureOutput ? "pipe" : "inherit",
+    stderr: captureOutput ? "pipe" : "inherit"
+  });
+  const [code, stdout, stderr] = await Promise.all([
+    child.exited,
+    captureOutput ? readOutput(child.stdout) : Promise.resolve(""),
+    captureOutput ? readOutput(child.stderr) : Promise.resolve("")
+  ]);
   if (code !== 0) {
+    if (captureOutput) {
+      const output = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+      if (output) {
+        console.error(`\n${command.join(" ")} output:\n${output}`);
+      }
+    }
     throw Object.assign(new Error(`${command.join(" ")} exited with code ${code}`), { code });
   }
 }
 
-async function runAllowFailure(command: string[]) {
-  const child = Bun.spawn(command, { stdout: "inherit", stderr: "inherit" });
-  return child.exited;
+async function runAllowFailure(command: string[], quiet = false) {
+  const captureOutput = quiet && !verboseCompose;
+  const child = Bun.spawn(command, {
+    stdout: captureOutput ? "pipe" : "inherit",
+    stderr: captureOutput ? "pipe" : "inherit"
+  });
+  await Promise.all([
+    child.exited,
+    captureOutput ? readOutput(child.stdout) : Promise.resolve(""),
+    captureOutput ? readOutput(child.stderr) : Promise.resolve("")
+  ]);
 }
 
 async function composeDown() {
   if (externalServerUrl) return;
-  await runAllowFailure(["docker", "compose", "-f", composeFile, "down"]);
+  await runAllowFailure(["docker", "compose", "-f", composeFile, "down"], true);
 }
 
 async function waitForHealthz() {
@@ -72,7 +100,7 @@ let exitCode = 0;
 try {
   if (!externalServerUrl) {
     await composeDown();
-    await run(["docker", "compose", "-f", composeFile, "up", "-d", "--build", "app"]);
+    await run(["docker", "compose", "-f", composeFile, "up", "-d", "--build", "app"], process.env, true);
     await waitForHealthz();
   }
 
