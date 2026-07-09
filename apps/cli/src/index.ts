@@ -64,7 +64,7 @@ const configCommandSchema = z
   });
 const uploadPathSchema = z.string().min(1, "Upload path is required.");
 
-program.name("opendrop").description("Publish and review OpenDrop static previews").version("0.1.0");
+program.name("opendrop").description("Publish and review OpenDrop static previews").version("0.2.0");
 
 program
   .command("config")
