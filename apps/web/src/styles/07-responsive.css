@@ -1,0 +1,188 @@
+
+.threadCard .threadItem .threadItemText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.threadCard .threadItem .threadShapeIcon {
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: #f7faf5;
+  color: var(--accent-foreground);
+}
+
+.threadShapeBadgeIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.threadCard .threadItem .threadAuthorLabel {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13.5px;
+  font-weight: 620;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.threadItemMeta {
+  display: block;
+  margin-top: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.threadCard [data-slot="accordion-trigger-icon"] {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+}
+
+.threadCard .threadItem:hover {
+  text-decoration: none;
+}
+
+.threadCardExpanded.commentThread {
+  display: block;
+  height: auto;
+  padding: 0 10px 12px 28px;
+}
+
+.threadRootNode {
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.threadDetailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.threadDetailKicker {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.threadRootMain {
+  gap: 8px;
+  border: 1px solid #dfe3da;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.threadRootBody {
+  color: #1f241f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.commentChildren {
+  display: grid;
+  gap: 10px;
+}
+
+.replyDivider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.replyDivider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border);
+}
+
+.commentNode.isReply {
+  margin-left: 0;
+  border-left: 2px solid #d6ded5;
+  padding-left: 12px;
+}
+
+.commentMain {
+  gap: 6px;
+}
+
+.commentBody {
+  color: #2d332e;
+}
+
+.commentActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.linkButton {
+  width: fit-content;
+  height: 26px;
+  min-height: 26px;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.linkButton:hover {
+  color: #0c6b58;
+}
+
+.inlineComposer {
+  position: relative;
+  display: block;
+}
+
+.inlineComposer input {
+  padding-right: 40px;
+}
+
+.inlineComposer button {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+@media (min-width: 721px) {
+  .previewRoom.commentsOpen .roomToolbar {
+    left: calc(50% - 212px);
+  }
+}
+
+@media (max-width: 720px) {
+  [data-slot="drawer-content"].reviewDrawerContent {
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  .roomCommentsBody {
+    padding: 12px;
+  }
+}

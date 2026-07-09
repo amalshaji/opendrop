@@ -1,0 +1,3 @@
+display_name: OpenDrop Review Page
+short_description: Fetch preview HTML and annotations for review work.
+default_prompt: Review this OpenDrop page and summarize the relevant annotations and page content.

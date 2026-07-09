@@ -1,0 +1,60 @@
+---
+title: Cloudflare Deployment
+description: Deploy the same server app with D1 and R2.
+---
+
+The server app includes a Cloudflare entrypoint at `apps/server/src/cloudflare.ts`.
+
+## Runtime Mapping
+
+- Database: D1
+- Object storage: R2
+- HTTP server: Cloudflare Workers runtime
+- Web shell: Workers Static Assets from `apps/web/dist`
+- Auth: Better Auth plus OAuth or trusted headers
+
+## Configure Wrangler
+
+Edit `apps/server/wrangler.toml`:
+
+```toml
+name = "opendrop"
+main = "src/cloudflare.ts"
+compatibility_date = "2026-07-08"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "opendrop"
+database_id = "replace-with-d1-id"
+migrations_dir = "../../packages/shared/migrations"
+
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "opendrop-artifacts"
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+```
+
+## Deploy
+
+```bash
+bun run --cwd apps/web build
+bun run --cwd apps/server deploy:cloudflare
+```
+
+## Trusted Header Deployments
+
+Cloudflare Access can inject `cf-access-authenticated-user-email`. Protect the Worker with Cloudflare Access before relying on these headers, and do not expose a route where clients can send identity headers directly.
+
+After Access protects the Worker, opt in explicitly:
+
+```toml
+OPENDROP_AUTH_MODE = "trusted-header"
+TRUSTED_HEADER_EMAIL = "cf-access-authenticated-user-email"
+TRUSTED_PROXY_HOSTS = "cloudflare-workers"
+OPENDROP_TRUST_CLOUDFLARE_ACCESS = "true"
+```

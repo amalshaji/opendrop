@@ -1,0 +1,26 @@
+name = "opendrop"
+main = "src/cloudflare.ts"
+compatibility_date = "2026-07-08"
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[vars]
+OPENDROP_AUTH_MODE = "oauth"
+OPENDROP_DEFAULT_VISIBILITY = "public"
+TRUSTED_PROXY_CIDRS = ""
+TRUSTED_PROXY_HOSTS = ""
+OPENDROP_TRUST_CLOUDFLARE_ACCESS = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "opendrop"
+database_id = "replace-with-d1-id"
+migrations_dir = "../../packages/shared/migrations"
+
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "opendrop-artifacts"

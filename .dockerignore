@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules
+**/node_modules
+
+# Build outputs and caches
+dist
+**/dist
+.vite
+**/.vite
+
+# VCS / docs / test artifacts
+.git
+docs
+test-results
+coverage
+
+# Local data and secrets
+.env
+.env.*
+!.env.example
+**/storage/*.sqlite

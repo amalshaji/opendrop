@@ -1,0 +1,3 @@
+display_name: OpenDrop Annotate
+short_description: Work with OpenDrop review annotations safely.
+default_prompt: Add or summarize annotations for this OpenDrop preview.
