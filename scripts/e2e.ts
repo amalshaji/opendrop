@@ -1,6 +1,7 @@
 const serverPort = process.env.OPENDROP_E2E_SERVER_PORT || "43300";
+const managedServerUrl = `http://127.0.0.1:${serverPort}`;
 const externalServerUrl = process.env.OPENDROP_E2E_SERVER_URL;
-const serverUrl = externalServerUrl || `http://127.0.0.1:${serverPort}`;
+const serverUrl = externalServerUrl || managedServerUrl;
 const composeFile = "docker-compose.e2e.yml";
 const verboseCompose = ["1", "true"].includes((process.env.OPENDROP_E2E_COMPOSE_VERBOSE || "").toLowerCase());
 
@@ -9,16 +10,19 @@ const suites: Record<string, string[]> = {
   cli: ["tests/e2e/cli.spec.ts"],
   ui: ["tests/e2e/ui.spec.ts", "tests/e2e/matrix.spec.ts"]
 };
+const lifecycleCommands = new Set(["start", "down"]);
 
 const suiteName = process.argv[2] || "all";
 const selectedSpecs = suites[suiteName];
 
-if (!selectedSpecs) {
-  console.error(`Unknown E2E suite "${suiteName}". Expected one of: ${Object.keys(suites).join(", ")}.`);
+if (!selectedSpecs && !lifecycleCommands.has(suiteName)) {
+  console.error(`Unknown E2E command "${suiteName}". Expected one of: ${[...Object.keys(suites), ...lifecycleCommands].join(", ")}.`);
   process.exit(1);
 }
 
 let shuttingDown = false;
+let stopComposeOnSignal = false;
+let stopComposeOnExit = false;
 
 async function readOutput(stream: ReadableStream<Uint8Array> | null) {
   return stream ? await new Response(stream).text() : "";
@@ -61,29 +65,35 @@ async function runAllowFailure(command: string[], quiet = false) {
 }
 
 async function composeDown() {
-  if (externalServerUrl) return;
   await runAllowFailure(["docker", "compose", "-f", composeFile, "down"], true);
 }
 
-async function waitForHealthz() {
+async function composeStart() {
+  await composeDown();
+  await run(["docker", "compose", "-f", composeFile, "up", "-d", "--build", "app"], process.env, true);
+  await waitForHealthz(managedServerUrl);
+}
+
+async function waitForHealthz(url: string) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 120_000) {
     try {
-      const response = await fetch(`${serverUrl}/healthz`);
+      const response = await fetch(`${url}/healthz`);
       if (response.ok) return;
     } catch {
       // Keep polling until Docker finishes starting the production server.
     }
     await Bun.sleep(500);
   }
-  throw new Error(`Timed out waiting for ${serverUrl}/healthz`);
+  await runAllowFailure(["docker", "compose", "-f", composeFile, "logs", "app"]);
+  throw new Error(`Timed out waiting for ${url}/healthz`);
 }
 
 async function cleanupAndExit(signal: string, code: number) {
   if (shuttingDown) process.exit(code);
   shuttingDown = true;
   console.log(`Received ${signal}; stopping E2E services.`);
-  await composeDown();
+  if (stopComposeOnSignal) await composeDown();
   process.exit(code);
 }
 
@@ -98,24 +108,33 @@ process.on("SIGTERM", () => {
 let exitCode = 0;
 
 try {
-  if (!externalServerUrl) {
+  if (suiteName === "start") {
+    stopComposeOnSignal = true;
+    await composeStart();
+    stopComposeOnSignal = false;
+  } else if (suiteName === "down") {
     await composeDown();
-    await run(["docker", "compose", "-f", composeFile, "up", "-d", "--build", "app"], process.env, true);
-    await waitForHealthz();
-  }
-
-  await run(
-    ["bunx", "playwright", "test", ...selectedSpecs, "--workers=1"],
-    {
-      ...process.env,
-      OPENDROP_E2E_SERVER_URL: serverUrl,
-      OPENDROP_E2E_SKIP_WEB_SERVER: "true"
+  } else {
+    if (!selectedSpecs) throw new Error(`Unknown E2E suite "${suiteName}".`);
+    if (!externalServerUrl) {
+      stopComposeOnSignal = true;
+      stopComposeOnExit = true;
+      await composeStart();
     }
-  );
+
+    await run(
+      ["bunx", "playwright", "test", ...selectedSpecs, "--workers=1"],
+      {
+        ...process.env,
+        OPENDROP_E2E_SERVER_URL: serverUrl,
+        OPENDROP_E2E_SKIP_WEB_SERVER: "true"
+      }
+    );
+  }
 } catch (error) {
   exitCode = typeof (error as { code?: unknown }).code === "number" ? ((error as { code: number }).code) : 1;
 } finally {
-  await composeDown();
+  if (stopComposeOnExit) await composeDown();
 }
 
 process.exit(exitCode);

@@ -76,9 +76,22 @@ jobs:
         env:
           OPENDROP_S3_TEST_ENDPOINT: http://127.0.0.1:19000
       - run: bunx playwright install --with-deps chromium firefox webkit
-      - run: bun run test:e2e
+      - name: Start E2E Docker Compose
+        id: e2e_compose
+        run: bun run test:e2e:start
+      - name: Run UI E2E
+        run: bun run test:e2e:ui
         env:
+          OPENDROP_E2E_SERVER_URL: http://127.0.0.1:43300
           OPENDROP_E2E_BROWSER_MATRIX: full
+      - name: Run CLI E2E
+        if: ${{ !cancelled() && steps.e2e_compose.outcome == 'success' }}
+        run: bun run test:e2e:cli
+        env:
+          OPENDROP_E2E_SERVER_URL: http://127.0.0.1:43300
+      - name: Stop E2E Docker Compose
+        if: always()
+        run: bun run test:e2e:down
       - run: bun run test:skills
       - run: bun run release:dry-run
 
