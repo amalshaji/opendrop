@@ -21,8 +21,8 @@ test("primary publish, preview, and comment flow works in this browser profile",
   const slug = uniqueName("matrix");
 
   await loginWithDevAuth(page, `${namespace}@example.com`);
-  await page.locator("input[type=file]").first().setInputFiles(validSite);
   await page.getByPlaceholder("slug optional").fill(slug);
+  await page.locator("input[type=file]").first().setInputFiles(validSite);
   await expect(page.getByText("Root index.html found.")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Publish" }).click();
 
