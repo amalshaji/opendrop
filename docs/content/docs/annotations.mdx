@@ -1,0 +1,32 @@
+---
+title: Annotations
+description: Point comments and text highlights for static previews.
+---
+
+OpenDrop keeps review lightweight. Share URLs open a full-screen review room with floating tools and a comments panel, similar to modern design review workflows but attached to the live static preview.
+
+## Supported Annotation Types
+
+- **Point comments** for a precise location on the page.
+- **Text highlights** for selected copy inside the preview.
+- **Nested replies** on any comment in a thread.
+- **Resolved state** so open feedback stays separate from shipped work.
+
+## Version Awareness
+
+Annotations are stored against a deployment version and page path. A comment on version 3 does not silently move to version 4. The review room shows version context and lets reviewers switch versions while keeping threads attached to the version they were created on.
+
+## Coordinate Model
+
+Point comments store normalized coordinates plus viewport context. Text highlights store normalized rects and the selected text so the preview can render the mark and keep it aligned as the page scrolls.
+
+## Agent Access
+
+The CLI can fetch page content with annotations:
+
+```bash
+opendrop fetch amal/homepage --include html,annotations
+opendrop annotations amal/homepage --path /
+```
+
+This lets an agent reason over only the comments relevant to the current page, not the entire project.

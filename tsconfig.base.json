@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@opendrop/shared": ["./packages/shared/src/index.ts"],
+      "@opendrop/shared/core": ["./packages/shared/src/core/index.ts"],
+      "@opendrop/shared/db": ["./packages/shared/src/db/index.ts"],
+      "@opendrop/shared/db/d1": ["./packages/shared/src/db/d1.ts"],
+      "@opendrop/shared/db/repository": ["./packages/shared/src/db/repository.ts"],
+      "@opendrop/shared/db/schema": ["./packages/shared/src/db/schema.ts"],
+      "@opendrop/shared/db/tokens": ["./packages/shared/src/db/tokens.ts"],
+      "@opendrop/shared/db/types": ["./packages/shared/src/db/types.ts"],
+      "@opendrop/shared/storage": ["./packages/shared/src/storage/index.ts"],
+      "@opendrop/shared/storage/interface": ["./packages/shared/src/storage/interface.ts"],
+      "@opendrop/shared/storage/r2": ["./packages/shared/src/storage/r2.ts"],
+      "@opendrop/shared/storage/s3": ["./packages/shared/src/storage/s3.ts"],
+      "@opendrop/shared/auth": ["./packages/shared/src/auth/index.ts"],
+      "@opendrop/shared/auth/config": ["./packages/shared/src/auth/config.ts"]
+    }
+  }
+}

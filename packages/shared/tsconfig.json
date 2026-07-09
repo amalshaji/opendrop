@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@opendrop/shared": ["src/index.ts"],
+      "@opendrop/shared/core": ["src/core/index.ts"],
+      "@opendrop/shared/auth": ["src/auth/index.ts"],
+      "@opendrop/shared/db": ["src/db/index.ts"],
+      "@opendrop/shared/storage": ["src/storage/index.ts"]
+    },
+    "noEmit": true
+  }
+}

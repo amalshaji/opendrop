@@ -1,0 +1,72 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: change-this-local-secret-before-production
+      OPENDROP_AUTH_MODE: trusted-header
+      OPENDROP_DB_DRIVER: sqlite
+      SQLITE_PATH: /data/opendrop.sqlite
+      OPENDROP_STORAGE_DRIVER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: opendrop
+      S3_ACCESS_KEY_ID: opendrop
+      S3_SECRET_ACCESS_KEY: opendrop-secret
+      S3_FORCE_PATH_STYLE: "true"
+      TRUSTED_PROXY_CIDRS: 127.0.0.1/32,172.16.0.0/12
+      TRUSTED_HEADER_EMAIL: x-opendrop-email
+      TRUSTED_HEADER_USER_ID: x-opendrop-user-id
+      TRUSTED_HEADER_NAME: x-opendrop-name
+    volumes:
+      - opendrop-data:/data
+    depends_on:
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: opendrop
+      MINIO_ROOT_PASSWORD: opendrop-secret
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "mc alias set local http://minio:9000 opendrop opendrop-secret && mc mb --ignore-existing local/opendrop"]
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: opendrop
+      POSTGRES_PASSWORD: opendrop
+      POSTGRES_DB: opendrop
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  opendrop-data:
+  minio-data:
+  postgres-data:

@@ -1,0 +1,3 @@
+display_name: OpenDrop Upload
+short_description: Publish static artifacts to OpenDrop and return preview URLs.
+default_prompt: Upload this static site to OpenDrop, validate it, and give me the latest and version-specific preview URLs.

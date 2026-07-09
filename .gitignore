@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+.source/
+.wrangler/
+.turbo/
+.DS_Store
+*.log
+*.sqlite
+*.sqlite3
+.env
+.env.local
+test-results/
+playwright-report/
+coverage/
+/storage/
+/apps/server/storage/

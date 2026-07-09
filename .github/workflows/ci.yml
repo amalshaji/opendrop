@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/**"
+      - "skills/**"
+      - "tests/**"
+      - "docs/**"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package.json"
+      - "bun.lock"
+      - "README.md"
+      - "playwright.config.ts"
+      - "tsconfig.base.json"
+      - "vitest.config.ts"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/**"
+      - "skills/**"
+      - "tests/**"
+      - "docs/**"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "package.json"
+      - "bun.lock"
+      - "README.md"
+      - "playwright.config.ts"
+      - "tsconfig.base.json"
+      - "vitest.config.ts"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: opendrop
+          POSTGRES_PASSWORD: opendrop
+          POSTGRES_DB: opendrop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opendrop -d opendrop"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run test:unit
+      - run: bun run test:auth-http
+      - run: bun run test:repositories
+        env:
+          OPENDROP_POSTGRES_TEST_URL: postgres://opendrop:opendrop@localhost:5432/opendrop
+      - run: docker compose -f docker-compose.e2e.yml up -d minio createbuckets
+      - run: bun run test:storage
+        env:
+          OPENDROP_S3_TEST_ENDPOINT: http://127.0.0.1:19000
+      - run: bunx playwright install --with-deps chromium firefox webkit
+      - run: bun run test:e2e
+        env:
+          OPENDROP_E2E_BROWSER_MATRIX: full
+      - run: bun run test:skills
+      - run: bun run release:dry-run
+
+  docker-dry-run:
+    runs-on: ubuntu-latest
+    if: contains(join(github.event.pull_request.labels.*.name, ','), 'release:server')
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build .
+
+  npm-dry-run:
+    runs-on: ubuntu-latest
+    if: contains(join(github.event.pull_request.labels.*.name, ','), 'release:cli')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd apps/cli build
+      - run: bun run --cwd apps/cli pack:dry-run

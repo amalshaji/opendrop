@@ -1,0 +1,521 @@
+
+.roomComposer {
+  display: grid;
+  gap: 8px;
+}
+
+.composerBox {
+  position: relative;
+}
+
+.composerBox textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding-right: 46px;
+  padding-bottom: 42px;
+  background: #ffffff;
+}
+
+.composerSubmit {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  border-radius: 999px;
+}
+
+.composerAnchor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 2px solid var(--primary);
+  background: rgb(12 107 88 / 8%);
+  padding: 6px 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.composerAnchor svg {
+  flex-shrink: 0;
+  color: #0c6b58;
+}
+
+.composerQuote span {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--foreground);
+  font-style: italic;
+}
+
+.roomThreadHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.roomThreadHead strong {
+  font-family: var(--font-heading);
+  font-size: 13px;
+}
+
+.roomThreadsBody {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #b8beb4 transparent;
+}
+
+.threadCard {
+  border: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.threadCard.isExpanded {
+  background: #f8faf6;
+}
+
+.threadCard.isResolved {
+  opacity: 0.72;
+}
+
+.threadCard .threadItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 10px;
+  text-align: left;
+}
+
+.threadItemBody {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.threadItemChevron {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  transition: transform 0.15s ease;
+}
+
+.threadCard.isExpanded .threadItemChevron {
+  transform: rotate(180deg);
+}
+
+.threadCard.isExpanded .threadItem {
+  border-bottom: 1px solid var(--border);
+}
+
+.threadCardExpanded {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px 10px;
+}
+
+.threadCardToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.threadItemMeta {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.roomThreads {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.commentNode {
+  display: grid;
+  gap: 8px;
+}
+
+.commentNode.isReply {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.commentMain {
+  display: grid;
+  gap: 5px;
+}
+
+.commentMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.commentAuthor {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.commentBody {
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commentActions {
+  display: flex;
+  gap: 10px;
+}
+
+.linkButton {
+  width: fit-content;
+  height: 26px;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  color: #0c6b58;
+}
+
+.commentChildren {
+  display: grid;
+  gap: 8px;
+}
+
+.inlineComposer {
+  position: relative;
+  display: block;
+}
+
+.inlineComposer input {
+  padding-right: 40px;
+}
+
+.inlineComposer button {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 999px;
+}
+
+.previewRoomEmpty {
+  align-items: center;
+  justify-content: center;
+}
+
+.roomEmptyCard {
+  display: grid;
+  max-width: 420px;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  padding: 28px;
+  text-align: center;
+}
+
+.roomEmptyCard svg {
+  color: #075f45;
+}
+
+.roomEmptyCard strong {
+  font-family: var(--font-heading);
+  font-size: 18px;
+}
+
+.roomEmptyCard span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.roomEmptyCard [data-slot="button"] {
+  margin-top: 6px;
+}
+
+/* Keep the floating toolbar centered in the visible canvas when comments are open. */
+@media (min-width: 721px) {
+  .previewRoom.commentsOpen .roomToolbar {
+    left: calc(50% - 192px);
+  }
+}
+
+@media (max-width: 720px) {
+  .roomBar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .roomVisibility {
+    display: none;
+  }
+
+  .roomSelect {
+    max-width: 150px;
+  }
+
+  .roomTool span {
+    display: none;
+  }
+
+  .roomTool {
+    padding: 0 9px;
+  }
+
+  .roomComments {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+  }
+
+  .roomToolbar {
+    bottom: 12px;
+  }
+}
+
+
+/* ==========================================================================
+   Compact density pass — smaller controls and tighter padding on every screen.
+   Type system: Geist (body), Sora (headings), Fragment Mono (mono/code).
+   ========================================================================== */
+
+/* Controls */
+[data-slot="button"] {
+  min-height: 28px;
+  gap: 6px;
+  padding-inline: 9px;
+  font-size: 12.5px;
+}
+
+/* Default-size buttons share the exact height of inputs/selects so form rows line up. */
+[data-slot="button"][data-size="default"],
+[data-slot="button"][data-size="lg"] {
+  height: 28px;
+}
+
+[data-slot="button"] svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-slot="input"],
+select,
+.roomSelect,
+.deviceCodePanel input {
+  min-height: 28px;
+  height: 28px;
+  padding-block: 0;
+  font-size: 13px;
+}
+
+[data-slot="textarea"] {
+  min-height: 60px;
+  font-size: 13px;
+}
+
+[data-slot="badge"] {
+  height: 18px;
+  font-size: 11px;
+}
+
+/* Cards: single knob drives header + content + body padding */
+[data-slot="card"] {
+  --card-spacing: 0.75rem;
+}
+
+[data-slot="card-title"] {
+  font-size: 15px;
+}
+
+/* Workspace + topbar */
+.workspace {
+  padding: 18px 20px 26px;
+  gap: 12px;
+}
+
+.topbar {
+  min-height: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.topbarActions,
+.topbar [data-slot="button"],
+.topbar a,
+.topbar input,
+.topbar select {
+  pointer-events: auto;
+}
+
+.topbar h1 {
+  font-size: clamp(20px, 2.2vw, 27px);
+}
+
+.topbar p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.eyebrow {
+  margin-bottom: 6px;
+}
+
+.statusBadge,
+.routeBadge {
+  min-height: 24px;
+}
+
+/* Upload / new drop */
+.uploadPanelHeader {
+  padding-block: 12px !important;
+  gap: 20px;
+}
+
+.publishSuccessBanner {
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+  border-color: #9fcdbb;
+  background: #eef8f1;
+  color: #0b513b;
+}
+
+.publishSuccessBanner [data-slot="alert-title"] {
+  color: #073f2e;
+  font-weight: 720;
+}
+
+.publishSuccessBanner [data-slot="alert-description"] {
+  color: #2c5f4c;
+}
+
+.publishSuccessDetails {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.publishSuccessBanner a {
+  color: #075f45;
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-decoration-thickness: 1px;
+}
+
+.publishSuccessCopy {
+  flex: none;
+  border-color: #9fcdbb;
+  background: #ffffff;
+  color: #0b513b;
+}
+
+.publishSuccessCopy:hover {
+  border-color: #75b99f;
+  background: #f7fcf8;
+  color: #073f2e;
+}
+
+@media (max-width: 720px) {
+  .publishSuccessDetails {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.uploadComposer {
+  gap: 12px;
+  padding: 12px;
+}
+
+.uploadDropzone {
+  min-height: 168px;
+  padding: 16px;
+  gap: 10px;
+}
+
+.uploadSteps span {
+  min-height: 30px;
+}
+
+.dropzoneIcon {
+  width: 40px;
+  height: 40px;
+}
+
+.dropzoneCopy strong {
+  font-size: 15px;
+}
+
+.inspectorBlock {
+  gap: 8px;
+  padding: 12px;
+}
+
+.publishDock {
+  gap: 10px;
+  padding: 12px;
+}
+
+.publishField,
+.publishVisibility {
+  gap: 5px;
+}
+
+/* Validation */
+.validationReview {
+  gap: 12px;
+}
+
+.validationMetrics div {
+  padding: 10px 12px;
+}
+
+.validationMetrics strong {
+  font-size: 17px;
+}
+
+.validationWorkspace {
+  gap: 12px;
+}
+
+.issue {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.manifestRow {
+  min-height: 30px;
+  padding: 5px 10px;
+}
+
+.manifestRows {
+  max-height: 340px;
+}

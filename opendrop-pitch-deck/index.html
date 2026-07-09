@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenDrop Pitch Deck</title>
+    <style>
+      @font-face {
+        font-family: "Sora Variable";
+        src: url("../apps/web/node_modules/@fontsource-variable/sora/files/sora-latin-wght-normal.woff2") format("woff2");
+        font-weight: 100 800;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Geist Variable";
+        src: url("../apps/web/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2");
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Fragment Mono";
+        src: url("../apps/web/node_modules/@fontsource/fragment-mono/files/fragment-mono-latin-400-normal.woff2") format("woff2");
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        --paper: #f4f4ef;
+        --white: #ffffff;
+        --ink: #1f241f;
+        --green: #043f2e;
+        --green-2: #075f45;
+        --mint: #e7f1eb;
+        --line: #d7d9cf;
+        --muted: #6c7169;
+        --amber: #b98426;
+        --plum: #68528f;
+        --steel: #465461;
+        --red: #a33b35;
+        --font-display: "Sora Variable", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+        --font-body: "Geist Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+        --font-mono: "Fragment Mono", "SFMono-Regular", Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(90deg, rgba(31, 36, 31, 0.08) 1px, transparent 1px) 0 0 / 48px 48px,
+          linear-gradient(0deg, rgba(31, 36, 31, 0.06) 1px, transparent 1px) 0 0 / 48px 48px,
+          var(--paper);
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .deck {
+        min-height: 100vh;
+      }
+
+      .slide {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        border-bottom: 1px solid var(--line);
+        background: rgba(244, 244, 239, 0.88);
+      }
+
+      .slide.dark {
+        background:
+          linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px) 0 0 / 48px 48px,
+          linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 48px 48px,
+          var(--green);
+        color: var(--white);
+      }
+
+      .rail {
+        min-height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 24px;
+        padding: 24px 18px;
+        border-right: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.46);
+      }
+
+      .dark .rail {
+        border-right-color: rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        background: var(--green);
+        color: var(--white);
+        border: 1px solid var(--green);
+        font-family: var(--font-display);
+        font-weight: 760;
+      }
+
+      .dark .mark {
+        background: var(--white);
+        color: var(--green);
+        border-color: var(--white);
+      }
+
+      .rail-index {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        align-self: center;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .dark .rail-index {
+        color: rgba(255, 255, 255, 0.66);
+      }
+
+      .rail-path {
+        display: grid;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .dark .rail-path {
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .content {
+        min-width: 0;
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        padding: 56px;
+        display: grid;
+        align-content: center;
+        gap: 34px;
+      }
+
+      .deck-label {
+        width: fit-content;
+        border: 1px solid currentColor;
+        padding: 7px 10px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--green-2);
+        background: var(--white);
+      }
+
+      .dark .deck-label {
+        color: var(--white);
+        background: transparent;
+        border-color: rgba(255, 255, 255, 0.36);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-display);
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 980px;
+        font-size: 76px;
+        line-height: 0.96;
+        font-weight: 760;
+      }
+
+      h2 {
+        max-width: 900px;
+        font-size: 52px;
+        line-height: 1.02;
+        font-weight: 730;
+      }
+
+      h3 {
+        font-size: 18px;
+        line-height: 1.15;
+        font-weight: 730;
+      }
+
+      .lede {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 23px;
+        line-height: 1.36;
+      }
+
+      .dark .lede,
+      .dark .muted {
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      .hero-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.88fr) minmax(380px, 0.68fr);
+        gap: 42px;
+        align-items: center;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 28px;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .tag {
+        border: 1px solid var(--line);
+        background: var(--white);
+        color: var(--ink);
+        padding: 8px 10px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .dark .tag {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--white);
+        border-color: rgba(255, 255, 255, 0.22);
+      }
+
+      .artifact {
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: var(--white);
+        color: var(--ink);
+        box-shadow: 18px 18px 0 rgba(0, 0, 0, 0.16);
+      }
+
+      .artifact-top {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .traffic {
+        display: flex;
+        gap: 6px;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: var(--line);
+      }
+
+      .dot:nth-child(1) {
+        background: var(--red);
+      }
+
+      .dot:nth-child(2) {
+        background: var(--amber);
+      }
+
+      .dot:nth-child(3) {
+        background: var(--green-2);
+      }
+
+      .artifact-body {
+        min-height: 460px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 168px;
+        background:
+          linear-gradient(90deg, rgba(31, 36, 31, 0.05) 1px, transparent 1px) 0 0 / 34px 34px,
+          linear-gradient(0deg, rgba(31, 36, 31, 0.05) 1px, transparent 1px) 0 0 / 34px 34px,
+          #fbfbf7;
+      }
+
+      .preview-canvas {
+        position: relative;
+        padding: 30px;
+        display: grid;
+        align-content: end;
+        gap: 20px;
+      }
+
+      .preview-card {
+        width: min(420px, 100%);
+        border: 1px solid var(--line);
+        background: var(--white);
+        padding: 22px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .preview-card strong {
+        font-family: var(--font-display);
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .mini-lines {
+        display: grid;
+        gap: 8px;
+      }
+
+      .mini-lines span {
+        height: 9px;
+        background: #e0e3da;
+      }
+
+      .mini-lines span:nth-child(2) {
+        width: 78%;
+      }
+
+      .mini-lines span:nth-child(3) {
+        width: 54%;
+      }
+
+      .pin {
+        position: absolute;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--amber);
+        color: var(--white);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        box-shadow: 0 0 0 5px rgba(185, 132, 38, 0.18);
+      }
+
+      .pin.one {
+        top: 88px;
+        right: 128px;
+      }
+
+      .pin.two {
+        bottom: 146px;
+        left: 52px;
+        background: var(--plum);
+        box-shadow: 0 0 0 5px rgba(104, 82, 143, 0.16);
+      }
+
+      .review-panel {
+        border-left: 1px solid var(--line);
+        background: var(--white);
+        padding: 16px;
+        display: grid;
+        align-content: start;
+        gap: 12px;
+      }
+
+      .comment {
+        border: 1px solid var(--line);
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .comment b {
+        font-family: var(--font-mono);
+        font-weight: 400;
+        color: var(--green-2);
+      }
+
+      .two-up {
+        display: grid;
+        grid-template-columns: minmax(0, 0.82fr) minmax(320px, 0.58fr);
+        gap: 42px;
+        align-items: start;
+      }
+
+      .stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .points {
+        display: grid;
+        gap: 12px;
+      }
+
+      .point {
+        display: grid;
+        grid-template-columns: 12px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+        padding: 18px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .dark .point {
+        border-top-color: rgba(255, 255, 255, 0.18);
+      }
+
+      .point::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        margin-top: 4px;
+        background: var(--green-2);
+      }
+
+      .dark .point::before {
+        background: var(--amber);
+      }
+
+      .point p {
+        color: var(--muted);
+        line-height: 1.46;
+        font-size: 18px;
+      }
+
+      .dark .point p {
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      .system-map {
+        border: 1px solid var(--line);
+        background: var(--white);
+        padding: 18px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .node {
+        border: 1px solid var(--line);
+        padding: 15px;
+        display: grid;
+        gap: 7px;
+      }
+
+      .node strong {
+        font-family: var(--font-display);
+        font-size: 17px;
+      }
+
+      .node span {
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .connector {
+        height: 18px;
+        border-left: 1px solid var(--green-2);
+        margin-left: 18px;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border: 1px solid var(--line);
+        background: var(--white);
+      }
+
+      .step {
+        min-height: 230px;
+        padding: 22px;
+        display: grid;
+        align-content: space-between;
+        gap: 24px;
+        border-right: 1px solid var(--line);
+      }
+
+      .step:last-child {
+        border-right: 0;
+      }
+
+      .step span {
+        font-family: var(--font-mono);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .step p {
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border: 1px solid rgba(255, 255, 255, 0.24);
+      }
+
+      .metric {
+        padding: 24px;
+        border-right: 1px solid rgba(255, 255, 255, 0.24);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 8px;
+        font-family: var(--font-display);
+        font-size: 28px;
+      }
+
+      .metric span {
+        color: rgba(255, 255, 255, 0.7);
+        line-height: 1.35;
+      }
+
+      .split-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .deploy-card {
+        min-height: 330px;
+        border: 1px solid var(--line);
+        background: var(--white);
+        padding: 24px;
+        display: grid;
+        align-content: space-between;
+        gap: 26px;
+      }
+
+      .deploy-card strong {
+        display: block;
+        margin-bottom: 10px;
+        font-family: var(--font-display);
+        font-size: 28px;
+      }
+
+      .deploy-card p,
+      .caption {
+        color: var(--muted);
+        line-height: 1.42;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        border: 1px solid var(--line);
+        background: #fafaf6;
+        padding: 8px 9px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--steel);
+      }
+
+      .terminal {
+        border: 1px solid var(--line);
+        background: #181d1a;
+        color: #e8eee9;
+        padding: 22px;
+        font-family: var(--font-mono);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .terminal span {
+        color: #91d8bc;
+      }
+
+      .positioning {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+
+      .position-card {
+        min-height: 250px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        padding: 22px;
+        display: grid;
+        align-content: space-between;
+        gap: 28px;
+      }
+
+      .position-card p {
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.42;
+      }
+
+      .closing {
+        display: grid;
+        gap: 30px;
+        max-width: 940px;
+      }
+
+      .closing h2 {
+        font-size: 66px;
+      }
+
+      .ask-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .ask-line span {
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        padding: 9px 12px;
+        color: rgba(255, 255, 255, 0.78);
+        font-weight: 650;
+      }
+
+      .footer-note {
+        align-self: end;
+        font-family: var(--font-mono);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .dark .footer-note {
+        color: rgba(255, 255, 255, 0.62);
+      }
+
+      @media (max-width: 980px) {
+        .slide {
+          grid-template-columns: 72px minmax(0, 1fr);
+        }
+
+        .rail {
+          padding: 18px 12px;
+        }
+
+        .content {
+          padding: 38px 26px;
+        }
+
+        .hero-layout,
+        .two-up,
+        .split-columns,
+        .positioning {
+          grid-template-columns: 1fr;
+        }
+
+        .artifact-body {
+          grid-template-columns: 1fr;
+        }
+
+        .review-panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .workflow,
+        .metric-strip {
+          grid-template-columns: 1fr;
+        }
+
+        .step,
+        .metric {
+          min-height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .metric {
+          border-bottom-color: rgba(255, 255, 255, 0.24);
+        }
+
+        .step:last-child,
+        .metric:last-child {
+          border-bottom: 0;
+        }
+
+        h1 {
+          font-size: 54px;
+        }
+
+        h2,
+        .closing h2 {
+          font-size: 42px;
+        }
+
+        .lede {
+          font-size: 19px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .slide {
+          display: block;
+        }
+
+        .rail {
+          min-height: auto;
+          grid-template-columns: auto 1fr auto;
+          grid-template-rows: auto;
+          align-items: center;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .rail-index {
+          writing-mode: initial;
+          transform: none;
+          justify-self: center;
+        }
+
+        .rail-path {
+          display: none;
+        }
+
+        .content {
+          padding: 30px 18px 44px;
+        }
+
+        h1 {
+          font-size: 42px;
+        }
+
+        h2,
+        .closing h2 {
+          font-size: 34px;
+        }
+
+        .artifact {
+          box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.14);
+        }
+
+        .artifact-body {
+          min-height: 360px;
+        }
+
+        .pin.one {
+          right: 54px;
+        }
+
+        .review-panel {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+
+      @media print {
+        body {
+          background: var(--paper);
+        }
+
+        .slide {
+          min-height: 100vh;
+          page-break-after: always;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck" aria-label="OpenDrop pitch deck">
+      <section class="slide dark" id="slide-1">
+        <aside class="rail" aria-label="Slide 1">
+          <div class="mark">OD</div>
+          <div class="rail-index">01 / opener</div>
+          <div class="rail-path">
+            <span>/drop</span>
+            <span>ver_001</span>
+          </div>
+        </aside>
+        <div class="content hero-layout">
+          <div class="hero-copy">
+            <div class="deck-label">OpenDrop pitch deck</div>
+            <h1>Versioned review rooms for static HTML drops.</h1>
+            <p class="lede">Upload a folder or zip. Share one URL. Collect exact comments on the artifact that people actually saw.</p>
+            <div class="tag-row">
+              <span class="tag">Open source</span>
+              <span class="tag">Self-hosted</span>
+              <span class="tag">Cloudflare-ready</span>
+              <span class="tag">CLI-first</span>
+            </div>
+          </div>
+          <div class="artifact" aria-label="OpenDrop review room mockup">
+            <div class="artifact-top">
+              <div class="traffic"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+              <span>/team/launch?version=ver_042</span>
+            </div>
+            <div class="artifact-body">
+              <div class="preview-canvas">
+                <span class="pin one">c1</span>
+                <span class="pin two">c2</span>
+                <div class="preview-card">
+                  <strong>Launch page</strong>
+                  <div class="mini-lines"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+              <div class="review-panel">
+                <div class="comment"><b>c1</b><span>Move this CTA above the fold.</span></div>
+                <div class="comment"><b>c2</b><span>Keep this exact version for sign-off.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-2">
+        <aside class="rail" aria-label="Slide 2">
+          <div class="mark">OD</div>
+          <div class="rail-index">02 / gap</div>
+          <div class="rail-path">
+            <span>/problem</span>
+            <span>lost context</span>
+          </div>
+        </aside>
+        <div class="content two-up">
+          <div class="stack">
+            <div class="deck-label">The gap</div>
+            <h2>Static artifacts are moving faster than review workflows.</h2>
+            <p class="lede">Agents, designers, and front-end teams can produce HTML drops quickly. The handoff still happens through screenshots, Slack files, temporary buckets, and links that lose context.</p>
+          </div>
+          <div class="points">
+            <div class="point">
+              <p>Feedback is detached from the page, pixel, viewport, and version.</p>
+            </div>
+            <div class="point">
+              <p>Private previews are either too heavyweight or too improvised.</p>
+            </div>
+            <div class="point">
+              <p>Teams need a review room, not another rebuild pipeline.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-3">
+        <aside class="rail" aria-label="Slide 3">
+          <div class="mark">OD</div>
+          <div class="rail-index">03 / product</div>
+          <div class="rail-path">
+            <span>/solution</span>
+            <span>artifact-first</span>
+          </div>
+        </aside>
+        <div class="content">
+          <div class="stack">
+            <div class="deck-label">The product</div>
+            <h2>OpenDrop turns any static output into a governed preview.</h2>
+          </div>
+          <div class="workflow" aria-label="OpenDrop workflow">
+            <div class="step">
+              <span>upload</span>
+              <div>
+                <h3>Folder or zip</h3>
+                <p>Browser upload or `npx opendrop upload ./dist`.</p>
+              </div>
+            </div>
+            <div class="step">
+              <span>validate</span>
+              <div>
+                <h3>Safe artifact</h3>
+                <p>Paths, sizes, duplicates, counts, and root index checked before publish.</p>
+              </div>
+            </div>
+            <div class="step">
+              <span>publish</span>
+              <div>
+                <h3>Immutable version</h3>
+                <p>Latest URL stays stable. Version URLs preserve the exact drop.</p>
+              </div>
+            </div>
+            <div class="step">
+              <span>review</span>
+              <div>
+                <h3>Inline comments</h3>
+                <p>Coordinates, highlights, replies, and resolved state stay attached.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide dark" id="slide-4">
+        <aside class="rail" aria-label="Slide 4">
+          <div class="mark">OD</div>
+          <div class="rail-index">04 / wedge</div>
+          <div class="rail-path">
+            <span>/why-now</span>
+            <span>human + agent</span>
+          </div>
+        </aside>
+        <div class="content">
+          <div class="stack">
+            <div class="deck-label">Why now</div>
+            <h2>AI changes the volume of static interfaces. Review needs a new default.</h2>
+          </div>
+          <div class="metric-strip">
+            <div class="metric">
+              <strong>More drops</strong>
+              <span>Agents can generate UI, docs, and prototypes on every task branch.</span>
+            </div>
+            <div class="metric">
+              <strong>More reviewers</strong>
+              <span>Product, design, and engineering need the same artifact view.</span>
+            </div>
+            <div class="metric">
+              <strong>More control</strong>
+              <span>Teams want private, versioned review without sending artifacts to another SaaS.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-5">
+        <aside class="rail" aria-label="Slide 5">
+          <div class="mark">OD</div>
+          <div class="rail-index">05 / infra</div>
+          <div class="rail-path">
+            <span>/deploy</span>
+            <span>two paths</span>
+          </div>
+        </aside>
+        <div class="content">
+          <div class="stack">
+            <div class="deck-label">Deployment wedge</div>
+            <h2>Own the preview surface without adopting a new platform.</h2>
+          </div>
+          <div class="split-columns">
+            <div class="deploy-card">
+              <div>
+                <strong>Self-hosted</strong>
+                <p>Bun server, SQLite or Postgres metadata, and S3-compatible storage.</p>
+              </div>
+              <div class="chip-row">
+                <span class="chip">Bun</span>
+                <span class="chip">SQLite</span>
+                <span class="chip">Postgres</span>
+                <span class="chip">MinIO/S3</span>
+              </div>
+            </div>
+            <div class="deploy-card">
+              <div>
+                <strong>Cloudflare</strong>
+                <p>The same app shape targets Workers with D1 and R2 for teams that want edge-hosted previews.</p>
+              </div>
+              <div class="chip-row">
+                <span class="chip">Workers</span>
+                <span class="chip">D1</span>
+                <span class="chip">R2</span>
+                <span class="chip">OAuth</span>
+              </div>
+            </div>
+          </div>
+          <p class="caption">Auth fits existing environments: OAuth for app login, trusted headers for VPN or reverse-proxy deployments.</p>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-6">
+        <aside class="rail" aria-label="Slide 6">
+          <div class="mark">OD</div>
+          <div class="rail-index">06 / motion</div>
+          <div class="rail-path">
+            <span>/developers</span>
+            <span>npx first</span>
+          </div>
+        </aside>
+        <div class="content two-up">
+          <div class="stack">
+            <div class="deck-label">Adoption motion</div>
+            <h2>Start as the easiest place to drop a build.</h2>
+            <p class="lede">The wedge is practical: a Node-compatible CLI, a browser upload path, and repo-hosted agent skills that make OpenDrop easy to add to local and automated workflows.</p>
+          </div>
+          <div class="stack">
+            <div class="terminal" aria-label="OpenDrop CLI example">
+              <span>$</span> npx opendrop upload ./dist<br>
+              validating 148 files<br>
+              published /team/launch<br>
+              version ver_042
+            </div>
+            <div class="system-map">
+              <div class="node"><strong>CLI and agents</strong><span>Publish artifacts from task output.</span></div>
+              <div class="connector"></div>
+              <div class="node"><strong>Review room</strong><span>Humans comment on the exact rendered drop.</span></div>
+              <div class="connector"></div>
+              <div class="node"><strong>Next pass</strong><span>Feedback becomes concrete input for the next iteration.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide dark" id="slide-7">
+        <aside class="rail" aria-label="Slide 7">
+          <div class="mark">OD</div>
+          <div class="rail-index">07 / position</div>
+          <div class="rail-path">
+            <span>/category</span>
+            <span>review room</span>
+          </div>
+        </aside>
+        <div class="content">
+          <div class="stack">
+            <div class="deck-label">Positioning</div>
+            <h2>The artifact review layer for teams working with agents.</h2>
+          </div>
+          <div class="positioning">
+            <div class="position-card">
+              <h3>Not a rebuild pipeline</h3>
+              <p>OpenDrop stores and renders the static output you already have.</p>
+            </div>
+            <div class="position-card">
+              <h3>Not a file bucket</h3>
+              <p>It adds validation, versions, visibility, and review state.</p>
+            </div>
+            <div class="position-card">
+              <h3>Not a screenshot thread</h3>
+              <p>Feedback stays anchored to the live page and exact version.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide dark" id="slide-8">
+        <aside class="rail" aria-label="Slide 8">
+          <div class="mark">OD</div>
+          <div class="rail-index">08 / close</div>
+          <div class="rail-path">
+            <span>/ask</span>
+            <span>default drop target</span>
+          </div>
+        </aside>
+        <div class="content">
+          <div class="closing">
+            <div class="deck-label">The bet</div>
+            <h2>Make OpenDrop the default handoff point between generated artifacts and human review.</h2>
+            <p class="lede">A small open-source core can own a high-frequency workflow: publish the drop, review the drop, iterate from the drop.</p>
+            <div class="ask-line">
+              <span>Package the CLI</span>
+              <span>Ship the hosted path</span>
+              <span>Win agent workflows</span>
+            </div>
+          </div>
+          <div class="footer-note">OpenDrop - static previews with versioned review</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

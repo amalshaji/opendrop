@@ -1,0 +1,36 @@
+{
+  "name": "@opendrop/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./auth/config": "./src/auth/config.ts",
+    "./db": "./src/db/index.ts",
+    "./db/d1": "./src/db/d1.ts",
+    "./db/repository": "./src/db/repository.ts",
+    "./db/schema": "./src/db/schema.ts",
+    "./db/tokens": "./src/db/tokens.ts",
+    "./db/types": "./src/db/types.ts",
+    "./storage": "./src/storage/index.ts",
+    "./storage/interface": "./src/storage/interface.ts",
+    "./storage/r2": "./src/storage/r2.ts",
+    "./storage/s3": "./src/storage/s3.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.850.0",
+    "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.2",
+    "pg": "^8.16.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,22 @@
+---
+title: OpenDrop Documentation
+description: Learn how to run, deploy, publish, review, and extend OpenDrop.
+---
+
+OpenDrop is an open-source static preview system for teams and agents. It accepts folders or zip files, validates the artifact, stores immutable versions, renders from object storage, and keeps review comments attached to the exact version and page.
+
+## Start Here
+
+- [Self-hosting](/docs/self-hosting): run the Bun server with SQLite and MinIO.
+- [How OpenDrop works](/docs/how-it-works): understand the request and storage model.
+- [CLI](/docs/cli): publish with `npx opendrop`.
+- [Annotations](/docs/annotations): use point comments, text highlights, nested replies, and resolved state.
+
+## Architecture Shape
+
+The V1 repository intentionally stays small:
+
+- `apps/server`: Bun-native Hono server, Better Auth integration, self-hosted and Cloudflare entrypoints.
+- `apps/web`: React/Vite app for uploads, the full-screen review room, settings, and device login.
+- `apps/cli`: Node-compatible CLI published as `opendrop`.
+- `packages/shared`: core validation, auth helpers, repository interfaces, SQLite/D1 storage adapters, and S3/R2 storage adapters.

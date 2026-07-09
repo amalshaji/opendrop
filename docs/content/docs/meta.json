@@ -1,0 +1,13 @@
+{
+  "title": "OpenDrop",
+  "pages": [
+    "index",
+    "self-hosting",
+    "how-it-works",
+    "cloudflare",
+    "authentication",
+    "cli",
+    "annotations",
+    "storage"
+  ]
+}

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atlas Supply Co.</title>
+    <meta
+      name="description"
+      content="A full-page static test site for OpenDrop uploads, with realistic sections and content."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Atlas Supply Co. home">
+        <span class="brand-mark">A</span>
+        <span>Atlas Supply Co.</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#kits">Kits</a>
+        <a href="#field-notes">Field notes</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Static test deployment</p>
+          <h1>Field-ready gear for teams that ship under pressure.</h1>
+          <p>
+            Atlas Supply Co. is a fictional operations outfitter used as a realistic OpenDrop test page.
+            It includes navigation, cards, long-form copy, responsive layout, and enough visual structure to
+            catch broken CSS, missing assets, and preview regressions.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#kits">Explore kits</a>
+            <a class="button secondary" href="#field-notes">Read field notes</a>
+          </div>
+        </div>
+        <aside class="hero-panel" aria-label="Deployment checklist">
+          <span class="panel-label">Preview checklist</span>
+          <ul>
+            <li>Root <code>index.html</code></li>
+            <li>Linked stylesheet</li>
+            <li>Responsive sections</li>
+            <li>Production-like content</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="section" id="kits">
+        <div class="section-heading">
+          <p class="eyebrow">Prepared kits</p>
+          <h2>Everything a launch team needs for a clean handoff.</h2>
+        </div>
+        <div class="card-grid">
+          <article class="kit-card">
+            <span class="card-icon">01</span>
+            <h3>Launch Desk</h3>
+            <p>Runbooks, rollback notes, QA sign-off sheets, and stakeholder status templates.</p>
+          </article>
+          <article class="kit-card">
+            <span class="card-icon">02</span>
+            <h3>Preview Room</h3>
+            <p>Version links, annotation prompts, reviewer assignments, and resolved-thread summaries.</p>
+          </article>
+          <article class="kit-card">
+            <span class="card-icon">03</span>
+            <h3>Incident Pack</h3>
+            <p>Escalation contacts, diagnostics checklist, postmortem outline, and recovery timeline.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="split-section" id="field-notes">
+        <div>
+          <p class="eyebrow">Field notes</p>
+          <h2>Designed to make the preview feel real.</h2>
+        </div>
+        <div class="note-stack">
+          <article>
+            <h3>Real content catches layout mistakes.</h3>
+            <p>
+              Short dummy snippets often hide wrapping, spacing, and alignment problems. This fixture uses
+              natural sentence lengths so preview reviews can catch practical UI issues.
+            </p>
+          </article>
+          <article>
+            <h3>Sections test more than the happy path.</h3>
+            <p>
+              A header, hero, cards, long-form section, and footer make it easier to spot missing CSS,
+              incorrect asset paths, and responsive regressions in uploaded folders.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="quote-section" aria-label="Customer quote">
+        <blockquote>
+          “A test deployment should look enough like a real page that reviewers notice when something is off.”
+        </blockquote>
+        <p>— OpenDrop fixture guidance</p>
+      </section>
+    </main>
+
+    <footer class="site-footer" id="contact">
+      <div>
+        <strong>Atlas Supply Co.</strong>
+        <p>Fictional content for upload and preview testing.</p>
+      </div>
+      <a href="mailto:ops@example.com">ops@example.com</a>
+    </footer>
+  </body>
+</html>

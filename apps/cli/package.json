@@ -1,0 +1,33 @@
+{
+  "name": "opendrop",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "opendrop": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --target=node --outfile=dist/index.js && bun scripts/ensure-bin.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "dev": "bun src/index.ts",
+    "pack:dry-run": "bun pm pack --dry-run"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@opendrop/shared": "workspace:*",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
