@@ -53,6 +53,7 @@ The V1 repository intentionally stays small:
 bun install
 cp .env.example .env
 docker compose up -d minio
+docker compose up createbuckets
 bun run dev
 ```
 
@@ -128,6 +129,7 @@ Local development without the Docker server:
 
 ```bash
 docker compose up -d minio
+docker compose up createbuckets
 bun run dev
 ```
 
