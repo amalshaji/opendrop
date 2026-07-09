@@ -11,6 +11,7 @@ import {
   fetchIncludeSchema,
   pagePathSchema,
   pageQuerySchema,
+  publishedDeploymentsResponseSchema,
   previewRoutePathSchema,
   safeReturnQuerySchema,
   uploadMetadataSchema,
@@ -43,6 +44,47 @@ describe("zod request schemas", () => {
       slug: "demo",
       versionId: "ver_123"
     });
+  });
+
+  it("validates and narrows published deployment responses", () => {
+    const parsed = publishedDeploymentsResponseSchema.parse({
+      deployments: [
+        {
+          family: {
+            id: "dep_123",
+            namespaceName: "amal",
+            slug: "demo",
+            visibility: "public",
+            updatedAt: "2026-07-10T00:00:00.000Z",
+            ownerUserId: "internal-user-id"
+          },
+          version: {
+            id: "ver_123",
+            versionNumber: 2,
+            fileCount: 4,
+            totalBytes: 1024,
+            manifestHash: "internal-manifest-hash"
+          }
+        }
+      ]
+    });
+
+    expect(parsed.deployments[0]).toEqual({
+      family: {
+        id: "dep_123",
+        namespaceName: "amal",
+        slug: "demo",
+        visibility: "public",
+        updatedAt: "2026-07-10T00:00:00.000Z"
+      },
+      version: {
+        id: "ver_123",
+        versionNumber: 2,
+        fileCount: 4,
+        totalBytes: 1024
+      }
+    });
+    expect(publishedDeploymentsResponseSchema.safeParse({ deployments: [{ family: {}, version: {} }] }).success).toBe(false);
   });
 
   it("parses URL and string deployment references through shared schemas", () => {

@@ -1,5 +1,5 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { CheckCircle2, Eye, LogOut, MessageSquarePlus, Settings, UploadCloud } from "lucide-react";
+import { CheckCircle2, Eye, ListTree, LogOut, MessageSquarePlus, Settings, UploadCloud } from "lucide-react";
 import { statusTone } from "@/app/format";
 import type { AnnotationMode, DashboardView, Session, SettingsTab } from "@/app/types";
 import {
@@ -81,6 +81,11 @@ export function DashboardShell({
                   <SidebarMenuItem>
                     <SidebarMenuButton isActive={activeSidebarItem === "uploads"} onClick={() => setView("uploads")}>
                       <UploadCloud size={16} /> <span>New drop</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton isActive={activeSidebarItem === "deployments"} onClick={() => setView("deployments")}>
+                      <ListTree size={16} /> <span>All drops</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   {hasReviewWorkspace ? (

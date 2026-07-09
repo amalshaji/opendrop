@@ -22,7 +22,7 @@ export class R2ArtifactStorage implements ArtifactStorage {
     await this.bucket.put(key, body, {
       httpMetadata: {
         contentType,
-        cacheControl: "public, max-age=31536000, immutable"
+        cacheControl: "private, no-store"
       }
     });
   }

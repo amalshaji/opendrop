@@ -130,6 +130,27 @@ async function waitForExit(child: ChildProcessWithoutNullStreams): Promise<numbe
   });
 }
 
+test("publish controls stay inside the upload card after validation", async ({ page }) => {
+  const namespace = uniqueName("layoutowner");
+  await page.setViewportSize({ width: 1502, height: 817 });
+  await loginWithDevAuth(page, `${namespace}@example.com`);
+  await page.locator("input[type=file]").first().setInputFiles(validSite);
+  await expect(page.getByText("Root index.html found.")).toBeVisible({ timeout: 15_000 });
+
+  const uploadPanel = page.locator(".uploadPanel");
+  const publishDock = page.locator(".publishDock");
+  const publishButton = page.getByRole("button", { name: "Publish", exact: true });
+  await expect(publishDock).toBeVisible();
+  await expect(publishButton).toBeVisible();
+  await expect(publishButton).toBeEnabled();
+
+  const panelBounds = await uploadPanel.boundingBox();
+  const dockBounds = await publishDock.boundingBox();
+  expect(panelBounds).not.toBeNull();
+  expect(dockBounds).not.toBeNull();
+  expect(dockBounds!.y + dockBounds!.height).toBeLessThanOrEqual(panelBounds!.y + panelBounds!.height + 1);
+});
+
 test("UI auth, upload, view, comment, reply, versions, and visibility", async ({ browser, page }) => {
   const namespace = uniqueName("uiowner");
   const email = `${namespace}@example.com`;
@@ -228,6 +249,33 @@ test("UI auth, upload, view, comment, reply, versions, and visibility", async ({
   expect(publicResponse?.status()).toBe(200);
   await expect(anonymousPublicPage.frameLocator('iframe[title="OpenDrop preview"]').getByText("Fixture published")).toBeVisible();
   await anonymousPublicContext.close();
+});
+
+test("published drops lists only the signed-in user's deployments", async ({ browser, page }) => {
+  const namespace = uniqueName("publishedowner");
+  const slug = uniqueName("published");
+
+  await loginWithDevAuth(page, `${namespace}@example.com`);
+  await uploadFolder(page, slug);
+  await page.goto("/");
+  await page.getByRole("button", { name: "All drops" }).click();
+
+  await expect(page.getByRole("heading", { name: "Published drops" })).toBeVisible();
+  const route = `/${namespace}/${slug}`;
+  const row = page.locator(".publishedRow").filter({ hasText: route });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Public");
+  await expect(row).toContainText("v1");
+  await expect(row).toContainText("2 files");
+  await expect(row.getByRole("link", { name: `Open ${route}` })).toHaveAttribute("href", route);
+
+  const otherContext = await browser.newContext();
+  const otherPage = await otherContext.newPage();
+  await loginWithDevAuth(otherPage, `${uniqueName("publishedother")}@example.com`);
+  await otherPage.getByRole("button", { name: "All drops" }).click();
+  await expect(otherPage.getByText("No published drops yet")).toBeVisible();
+  await expect(otherPage.getByText(route, { exact: true })).toHaveCount(0);
+  await otherContext.close();
 });
 
 test("private previews require auth and hide owner controls from reviewers", async ({ browser, page }) => {

@@ -159,7 +159,41 @@ describe("trusted-header auth over HTTP", () => {
     });
     expect(repo.createdIdentities[0].subject).not.toBe("ba_user_1");
   });
+
+  it("rejects OAuth sessions whose email has not been verified", async () => {
+    const repo = new TrustedHeaderTestRepo();
+    const app = createOpenDropApp({
+      repo: repo.asRepository(),
+      storage: noopStorage,
+      browserAuth: oauthBrowserAuthWith({ emailVerified: false }),
+      authConfig: oauthConfig()
+    });
+
+    expect(await (await app.fetch(new Request("https://drop.example.test/api/session"))).json()).toMatchObject({ authenticated: false });
+    expect(repo.createdUsers).toHaveLength(0);
+  });
+
+  it("rejects sessions without an account from a configured OAuth provider", async () => {
+    const repo = new TrustedHeaderTestRepo();
+    const app = createOpenDropApp({
+      repo: repo.asRepository(),
+      storage: noopStorage,
+      browserAuth: oauthBrowserAuthWith({}, "google"),
+      authConfig: oauthConfig()
+    });
+
+    expect(await (await app.fetch(new Request("https://drop.example.test/api/session"))).json()).toMatchObject({ authenticated: false });
+    expect(repo.createdUsers).toHaveLength(0);
+  });
 });
+
+function oauthConfig() {
+  return loadAuthConfig({
+    OPENDROP_AUTH_MODE: "oauth",
+    GITHUB_CLIENT_ID: "github-client",
+    GITHUB_CLIENT_SECRET: "github-secret"
+  });
+}
 
 function trustedConfig(overrides: Record<string, string> = {}) {
   return loadAuthConfig({
@@ -226,6 +260,7 @@ const oauthBrowserAuth: BrowserAuth = {
       user: {
         id: "ba_user_1",
         email: "OAuth@Example.com",
+        emailVerified: true,
         name: "OAuth User",
         image: "https://example.com/avatar.png"
       }
@@ -236,3 +271,22 @@ const oauthBrowserAuth: BrowserAuth = {
     accountId: "gh_123"
   })
 };
+
+function oauthBrowserAuthWith(user: Partial<{ emailVerified: boolean }> = {}, providerId: "github" | "google" = "github"): BrowserAuth {
+  return {
+    ...oauthBrowserAuth,
+    api: {
+      getSession: async () => ({
+        user: {
+          id: "ba_user_1",
+          email: "OAuth@Example.com",
+          emailVerified: user.emailVerified ?? true,
+          name: "OAuth User",
+          image: null
+        }
+      })
+    },
+    resolveOAuthAccount: async (_betterAuthUserId, providers) =>
+      providers.includes(providerId) ? { providerId, accountId: "account_123" } : null
+  };
+}

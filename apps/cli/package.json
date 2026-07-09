@@ -18,6 +18,7 @@
     "build": "bun build ./src/index.ts --target=node --outfile=dist/index.js && bun scripts/ensure-bin.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "bun src/index.ts",
+    "test:node": "node dist/index.js --help",
     "pack:dry-run": "npm pack --dry-run"
   },
   "dependencies": {

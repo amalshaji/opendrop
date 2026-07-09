@@ -59,20 +59,30 @@ export function registerDeviceRoutes(app: Hono<AppBindings>, { repo }: DeviceRou
       await repo.rejectDeviceAuthorization(body.data.userCode, auth.user.id);
       return c.json({ ok: true, status: "rejected" });
     }
-    const token = createRawCliToken();
-    await repo.approveDeviceAuthorization(body.data.userCode, auth.user.id, await hashToken(token), token);
+    await repo.approveDeviceAuthorization(body.data.userCode, auth.user.id);
     return c.json({ ok: true, status: "approved" });
   });
 
   app.post("/api/device/token", async (c) => {
     const body = deviceTokenBodySchema.safeParse(await jsonObject(c));
     if (!body.success) return validationError(c, body.error);
-    const exchanged = await repo.exchangeDeviceAuthorization(await hashToken(body.data.deviceCode));
+    const accessToken = createRawCliToken();
+    const exchanged = await repo.exchangeDeviceAuthorization(
+      await hashToken(body.data.deviceCode),
+      await hashToken(accessToken)
+    );
     if (!exchanged) return c.json({ error: "Invalid device code." }, 400);
-    if (new Date(exchanged.expiresAt).getTime() < Date.now()) return c.json({ error: "expired_token" }, 400);
-    if (exchanged.status === "pending") return c.json({ error: "authorization_pending" }, 428);
-    if (exchanged.status === "rejected") return c.json({ error: "access_denied" }, 403);
-    if (!exchanged.tokenPlain) return c.json({ error: "token_already_exchanged" }, 400);
-    return c.json({ accessToken: exchanged.tokenPlain, tokenType: "Bearer" });
+    switch (exchanged.status) {
+      case "issued":
+        return c.json({ accessToken, tokenType: "Bearer" });
+      case "pending":
+        return c.json({ error: "authorization_pending" }, 428);
+      case "rejected":
+        return c.json({ error: "access_denied" }, 403);
+      case "expired":
+        return c.json({ error: "expired_token" }, 400);
+      case "already_exchanged":
+        return c.json({ error: "token_already_exchanged" }, 400);
+    }
   });
 }

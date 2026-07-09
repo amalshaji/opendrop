@@ -2,6 +2,8 @@ import { z } from "zod";
 import { visibilitySchema, type Visibility } from "../core";
 
 export type AuthMode = "oauth" | "trusted-header" | "dev";
+export const oauthProviderSchema = z.enum(["github", "google"]);
+export type OAuthProvider = z.infer<typeof oauthProviderSchema>;
 
 export interface TrustedHeaderConfig {
   trustedProxyCidrs: string[];
@@ -19,7 +21,7 @@ export interface OpenDropAuthConfig {
   authMode: AuthMode;
   allowedEmailDomains: string[];
   defaultVisibility: Visibility;
-  oauthProviders: Array<"github" | "google">;
+  oauthProviders: OAuthProvider[];
   trustedHeader?: TrustedHeaderConfig;
 }
 
@@ -81,8 +83,8 @@ export function loadAuthConfig(env: Record<string, string | undefined>): OpenDro
   };
 }
 
-export function configuredOAuthProviders(env: Record<string, string | undefined>): Array<"github" | "google"> {
-  const providers: Array<"github" | "google"> = [];
+export function configuredOAuthProviders(env: Record<string, string | undefined>): OAuthProvider[] {
+  const providers: OAuthProvider[] = [];
   if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) providers.push("github");
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) providers.push("google");
   return providers;

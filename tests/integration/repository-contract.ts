@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import type { OpenDropRepository } from "../../packages/shared/src/db/repository";
+import { createRawCliToken, hashToken } from "../../packages/shared/src/db/tokens";
 
 export async function expectOpenDropRepositoryContract(repo: OpenDropRepository): Promise<void> {
+  await repo.migrate();
   await repo.migrate();
 
   const suffix = randomUUID().slice(0, 8);
@@ -121,6 +123,11 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   });
   assert.equal(publisherOwned.version.versionNumber, 1);
   assert.equal(publisherSecond.version.versionNumber, 2);
+  const publishedByPublisher = await repo.listDeploymentsForUser(existingEmailUser.id);
+  assert.equal(publishedByPublisher.length, 1);
+  assert.equal(publishedByPublisher[0]?.family.slug, `publisher-owned-${suffix}`);
+  assert.equal(publishedByPublisher[0]?.version.id, publisherSecond.version.id);
+  assert.equal((await repo.listDeploymentsForUser(user.id)).length, 0);
   await repo.removeNamespacePublisher(sharedNamespaceName, user.id, existingEmailUser.id);
   assert.equal(await repo.userCanPublishNamespace(existingEmailUser.id, sharedNamespaceName), false);
 
@@ -147,15 +154,19 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   assert.equal(device.userCode, deviceUserCode);
   assert.equal((await repo.getDeviceAuthorizationByUserCode(deviceUserCode))?.status, "pending");
 
-  const deviceTokenHash = `device-token-hash-${suffix}`;
-  await repo.approveDeviceAuthorization(deviceUserCode, user.id, deviceTokenHash, `device-token-${suffix}`);
+  await repo.approveDeviceAuthorization(deviceUserCode, user.id);
   assert.equal((await repo.getDeviceAuthorizationByUserCode(deviceUserCode))?.status, "approved");
-  assert.equal((await repo.getUserByCliTokenHash(deviceTokenHash))?.id, user.id);
+  const candidateTokens = [createRawCliToken(), createRawCliToken()];
+  const exchangeResults = await Promise.all(
+    candidateTokens.map(async (token) => ({ token, result: await repo.exchangeDeviceAuthorization(deviceCodeHash, await hashToken(token)) }))
+  );
+  const issuedTokens = exchangeResults.filter(({ result }) => result?.status === "issued").map(({ token }) => token);
+  assert.equal(issuedTokens.length, 1);
+  assert.equal((await repo.getUserByCliTokenHash(await hashToken(issuedTokens[0]!)))?.id, user.id);
   assert.ok((await repo.listCliTokens(user.id)).some((item) => item.label === "contract-device" && item.deviceName === "repository-contract"));
-  const exchanged = await repo.exchangeDeviceAuthorization(deviceCodeHash);
-  assert.equal(exchanged?.tokenPlain, `device-token-${suffix}`);
-  const exchangedAgain = await repo.exchangeDeviceAuthorization(deviceCodeHash);
-  assert.equal(exchangedAgain?.tokenPlain, null);
+  const exchangedAgainToken = createRawCliToken();
+  const exchangedAgain = await repo.exchangeDeviceAuthorization(deviceCodeHash, await hashToken(exchangedAgainToken));
+  assert.equal(exchangedAgain?.status, "already_exchanged");
 
   const rejectedDeviceHash = `rejected-device-code-hash-${suffix}`;
   const rejectedUserCode = `NOPE-${suffix.toUpperCase()}`;
@@ -166,7 +177,7 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   });
   await repo.rejectDeviceAuthorization(rejectedUserCode, user.id);
   assert.equal((await repo.getDeviceAuthorizationByUserCode(rejectedUserCode))?.status, "rejected");
-  assert.equal((await repo.exchangeDeviceAuthorization(rejectedDeviceHash))?.status, "rejected");
+  assert.equal((await repo.exchangeDeviceAuthorization(rejectedDeviceHash, await hashToken(createRawCliToken())))?.status, "rejected");
 
   const slug = `contract-${suffix}`;
   const first = await repo.createDeploymentVersion({
@@ -215,6 +226,10 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   });
 
   assert.equal(second.version.versionNumber, 2);
+  const publishedByOwner = await repo.listDeploymentsForUser(user.id);
+  assert.equal(publishedByOwner.length, 1);
+  assert.equal(publishedByOwner[0]?.family.slug, slug);
+  assert.equal(publishedByOwner[0]?.version.id, second.version.id);
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug))?.version.id, second.version.id);
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug, first.version.id))?.version.id, first.version.id);
   assert.deepEqual(
@@ -225,6 +240,7 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
 
   const restored = await repo.restoreDeploymentVersion(user.defaultNamespace, slug, first.version.id, user.id);
   assert.equal(restored.family.latestVersionId, first.version.id);
+  assert.equal((await repo.listDeploymentsForUser(user.id))[0]?.version.id, first.version.id);
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug))?.version.id, first.version.id);
   assert.equal((await repo.setDeploymentVisibility(user.defaultNamespace, slug, "public", user.id)).visibility, "public");
 

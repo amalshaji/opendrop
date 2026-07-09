@@ -25,14 +25,16 @@ export function createOpenDropApp({ repo, storage, browserAuth, authConfig, trus
   const app = new Hono<AppBindings>();
 
   app.use("*", cors({ origin: "*", credentials: true }));
-  app.on(["GET", "POST"], "/api/auth/*", (c) => browserAuth.handler(c.req.raw));
+  if (browserAuth) {
+    app.on(["GET", "POST"], "/api/auth/*", (c) => browserAuth.handler(c.req.raw));
+  }
   app.use("*", async (c, next) => {
     let user: AuthenticatedUser | null = null;
     const authError: { message: string; status: number } | null = null;
     try {
       user =
         (await authenticateRequest(c.req.raw, sourceFromContext(c, trustedSourceHost, trustedSourceIp), repo, authConfig)) ??
-        (await authenticateBetterAuthSession(c.req.raw, repo, browserAuth, authConfig));
+        (browserAuth ? await authenticateBetterAuthSession(c.req.raw, repo, browserAuth, authConfig) : null);
     } catch (error) {
       if (error instanceof AuthRejectedError) {
         return c.json({ error: error.message }, contentfulStatus(error.status));
@@ -74,10 +76,10 @@ async function authenticateBetterAuthSession(
   authConfig: OpenDropAuthConfig
 ): Promise<AuthenticatedUser | null> {
   const session = await browserAuth.api.getSession({ headers: request.headers }).catch(() => null);
-  if (!session?.user?.email) return null;
+  if (!session?.user?.email || session.user.emailVerified !== true) return null;
   const email = normalizeEmail(session.user.email);
   if (!email || !emailAllowed(email, authConfig.allowedEmailDomains)) return null;
-  const account = await browserAuth.resolveOAuthAccount?.(session.user.id).catch(() => null);
+  const account = await browserAuth.resolveOAuthAccount?.(session.user.id, authConfig.oauthProviders).catch(() => null);
   if (!account) return null;
   const user = await repo.getOrCreateUser({
     provider: "oauth",

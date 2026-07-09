@@ -16,7 +16,6 @@ import type {
   NamespaceRecord,
   UserRecord
 } from "./types";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -29,6 +28,8 @@ import {
   namespaceAccessRecords,
   namespaceMemberRecord
 } from "./domain";
+import { decideDeviceTokenExchange } from "./device-authorization";
+import { runSqliteMigrations } from "./migrations";
 import { sqliteOpenDropSchema } from "./schema";
 
 const migrationsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../migrations");
@@ -40,13 +41,12 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
   constructor(path: string) {
     this.db = new Database(path);
     this.db.exec("pragma foreign_keys = ON");
+    this.db.exec("pragma busy_timeout = 5000");
     this.orm = drizzle(this.db, { schema: sqliteOpenDropSchema });
   }
 
   async migrate(): Promise<void> {
-    const sql = readFileSync(resolve(migrationsDir, "0001_initial.sql"), "utf8");
-    this.db.exec(sql);
-    this.ensureAnnotationColumns();
+    runSqliteMigrations(this.db, [{ directory: migrationsDir }]);
   }
 
   async getOrCreateUser(identity: IdentityInput): Promise<UserRecord> {
@@ -287,30 +287,21 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
     );
   }
 
-  async approveDeviceAuthorization(userCode: string, userId: string, tokenHash: string, tokenPlain: string): Promise<void> {
-    const row = await this.orm
-      .select()
-      .from(sqliteOpenDropSchema.deviceAuthorizations)
-      .where(eq(sqliteOpenDropSchema.deviceAuthorizations.userCode, userCode))
-      .get();
-    if (!row) throw new Error("Device code not found.");
-    if (row.status !== "pending") throw new Error("Device code is not pending.");
-    if (new Date(row.expiresAt).getTime() < Date.now()) throw new Error("Device code expired.");
-    const tokenId = randomId("tok_");
-    const now = nowIso();
-    await this.orm.insert(sqliteOpenDropSchema.cliTokens).values({
-      id: tokenId,
-      userId,
-      tokenHash,
-      label: row.label,
-      deviceName: row.deviceName,
-      userAgent: row.userAgent,
-      createdAt: now
+  async approveDeviceAuthorization(userCode: string, userId: string): Promise<void> {
+    this.orm.transaction((tx) => {
+      const row = tx
+        .select()
+        .from(sqliteOpenDropSchema.deviceAuthorizations)
+        .where(eq(sqliteOpenDropSchema.deviceAuthorizations.userCode, userCode))
+        .get();
+      if (!row) throw new Error("Device code not found.");
+      if (row.status !== "pending") throw new Error("Device code is not pending.");
+      if (new Date(row.expiresAt).getTime() < Date.now()) throw new Error("Device code expired.");
+      tx.update(sqliteOpenDropSchema.deviceAuthorizations)
+        .set({ status: "approved", userId, approvedAt: nowIso() })
+        .where(eq(sqliteOpenDropSchema.deviceAuthorizations.id, row.id))
+        .run();
     });
-    await this.orm
-      .update(sqliteOpenDropSchema.deviceAuthorizations)
-      .set({ status: "approved", userId, tokenHash, tokenPlain, approvedAt: now })
-      .where(eq(sqliteOpenDropSchema.deviceAuthorizations.id, row.id));
   }
 
   async rejectDeviceAuthorization(userCode: string, userId: string): Promise<void> {
@@ -320,31 +311,45 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.deviceAuthorizations.userCode, userCode), eq(sqliteOpenDropSchema.deviceAuthorizations.status, "pending")));
   }
 
-  async exchangeDeviceAuthorization(deviceCodeHash: string) {
-    const row = await this.orm
-      .select({
-        id: sqliteOpenDropSchema.deviceAuthorizations.id,
-        status: sqliteOpenDropSchema.deviceAuthorizations.status,
-        userId: sqliteOpenDropSchema.deviceAuthorizations.userId,
-        tokenPlain: sqliteOpenDropSchema.deviceAuthorizations.tokenPlain,
-        expiresAt: sqliteOpenDropSchema.deviceAuthorizations.expiresAt
-      })
-      .from(sqliteOpenDropSchema.deviceAuthorizations)
-      .where(eq(sqliteOpenDropSchema.deviceAuthorizations.deviceCodeHash, deviceCodeHash))
-      .get();
-    if (!row) return null;
-    if (row.status === "approved" && row.tokenPlain) {
-      await this.orm
-        .update(sqliteOpenDropSchema.deviceAuthorizations)
-        .set({ tokenPlain: null })
-        .where(eq(sqliteOpenDropSchema.deviceAuthorizations.id, row.id));
+  async exchangeDeviceAuthorization(deviceCodeHash: string, tokenHash: string) {
+    this.db.exec("begin immediate");
+    try {
+      const result = (() => {
+        const row = this.orm
+          .select()
+          .from(sqliteOpenDropSchema.deviceAuthorizations)
+          .where(eq(sqliteOpenDropSchema.deviceAuthorizations.deviceCodeHash, deviceCodeHash))
+          .get();
+        if (!row) return null;
+        const decision = decideDeviceTokenExchange(row);
+        if (decision.kind === "blocked") return decision.result;
+        const authorization = decision.authorization;
+        const now = nowIso();
+        const updated = this.db
+          .prepare("update device_authorizations set status = 'exchanged', token_hash = ? where id = ? and status = 'approved' and expires_at >= ?")
+          .run(tokenHash, authorization.id, now);
+        if (updated.changes !== 1) {
+          return { status: "already_exchanged" as const, expiresAt: authorization.expiresAt };
+        }
+        this.db
+          .prepare("insert into cli_tokens (id, user_id, token_hash, label, device_name, user_agent, created_at) values (?, ?, ?, ?, ?, ?, ?)")
+          .run(
+            randomId("tok_"),
+            authorization.userId,
+            tokenHash,
+            authorization.label,
+            authorization.deviceName,
+            authorization.userAgent,
+            now
+          );
+        return { status: "issued" as const, expiresAt: authorization.expiresAt };
+      })();
+      this.db.exec("commit");
+      return result;
+    } catch (error) {
+      this.db.exec("rollback");
+      throw error;
     }
-    return {
-      status: row.status,
-      userId: row.userId,
-      tokenPlain: row.tokenPlain,
-      expiresAt: row.expiresAt
-    };
   }
 
   async getNamespace(name: string): Promise<NamespaceRecord | null> {
@@ -496,6 +501,25 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.deploymentFamilies.namespaceName, namespace), eq(sqliteOpenDropSchema.deploymentFamilies.slug, slug)))
       .get();
     return row ? mapDeploymentFamily(row) : null;
+  }
+
+  async listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]> {
+    const rows = await this.orm
+      .select({
+        family: sqliteOpenDropSchema.deploymentFamilies,
+        version: sqliteOpenDropSchema.deploymentVersions
+      })
+      .from(sqliteOpenDropSchema.deploymentFamilies)
+      .innerJoin(
+        sqliteOpenDropSchema.deploymentVersions,
+        eq(sqliteOpenDropSchema.deploymentFamilies.latestVersionId, sqliteOpenDropSchema.deploymentVersions.id)
+      )
+      .where(eq(sqliteOpenDropSchema.deploymentFamilies.ownerUserId, userId))
+      .orderBy(desc(sqliteOpenDropSchema.deploymentFamilies.updatedAt));
+    return rows.map((row) => ({
+      family: mapDeploymentFamily(row.family),
+      version: mapDeploymentVersion(row.version)
+    }));
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {
@@ -713,14 +737,6 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
       .where(where)
       .orderBy(asc(sqliteOpenDropSchema.annotations.createdAt));
     return rows.map(mapDbAnnotation);
-  }
-
-  private ensureAnnotationColumns(): void {
-    const columns = new Set(this.db.prepare("pragma table_info(annotations)").all().map((row: any) => row.name));
-    if (!columns.has("parent_annotation_id")) {
-      this.db.exec("alter table annotations add column parent_annotation_id text references annotations(id)");
-    }
-    this.db.exec("create index if not exists idx_annotations_parent on annotations(parent_annotation_id)");
   }
 
   private assertParentAnnotation(familyId: string, versionId: string, pagePath: string, parentAnnotationId: string): void {

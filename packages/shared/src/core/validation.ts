@@ -126,7 +126,7 @@ export async function validateUploadFiles(
     }
     seen.add(normalizedPath);
 
-    const contentType = file.contentType || contentTypeForPath(normalizedPath);
+    const contentType = contentTypeForPath(normalizedPath);
     const textLines = isTextLike(normalizedPath, contentType) ? lineCount(file.bytes) : undefined;
     const entry: FileManifestEntry = {
       path: normalizedPath,

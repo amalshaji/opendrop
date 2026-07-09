@@ -171,7 +171,7 @@
 
 /* Sidebar */
 .appSidebar {
-  width: 212px;
+  width: 236px;
   padding: 14px 12px;
 }
 
@@ -294,6 +294,7 @@
   .workspace {
     height: 100vh;
     min-height: 0;
+    grid-auto-rows: max-content;
     overflow: auto;
     overscroll-behavior: contain;
   }
@@ -313,18 +314,17 @@
   }
 }
 
-/* No focus rings or glow borders anywhere in the app. */
+/* Keep focus visible without reintroducing component glow effects. */
 :where(
-  *,
-  *::before,
-  *::after
-):focus,
-:where(
-  *,
-  *::before,
-  *::after
+  a,
+  button,
+  input,
+  textarea,
+  select,
+  [tabindex]:not([tabindex="-1"])
 ):focus-visible {
-  outline: none !important;
+  outline: 2px solid #087456 !important;
+  outline-offset: 2px !important;
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }

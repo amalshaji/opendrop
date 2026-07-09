@@ -52,7 +52,8 @@ export function AuthLanding({ loading = false, session, devAuthEmail, setDevAuth
                   <span className="termLine"><span className="termPrompt">$</span> npx opendrop login</span>
                   <span className="termLine"><span className="termPrompt">$</span> npx opendrop upload ./dist --slug my-app</span>
                   <span className="termLine termOut">→ https://opendrop.app/you/my-app</span>
-                  <span className="termLine"><span className="termPrompt">$</span> npx opendrop annotations you/my-app <span className="termComment"># hand review notes to your agent</span></span>
+                  <span className="termLine"><span className="termPrompt">$</span> npx opendrop annotations you/my-app</span>
+                  <span className="termLine termComment termCommentLine"># hand review notes to your agent</span>
                 </code>
               </pre>
             </div>

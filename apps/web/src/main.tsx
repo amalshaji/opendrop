@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { parsePreviewRoute } from "@/app/format";
 import { AuthLanding } from "@/app/auth-landing";
 import { DashboardShell } from "@/app/dashboard-shell";
+import { DeploymentsWorkspace } from "@/app/deployments-workspace";
 import { DeviceApprovalPanel } from "@/app/device-approval-panel";
 import { PreviewLoading } from "@/app/preview-loading";
 import { PreviewRoom } from "@/app/preview-room";
@@ -11,11 +12,31 @@ import { SettingsWorkspace } from "@/app/settings-workspace";
 import { UploadWorkspace } from "@/app/upload-workspace";
 import { useAuthSession } from "@/app/use-auth-session";
 import { useDeviceApproval } from "@/app/use-device-approval";
+import { useDeploymentsWorkspace } from "@/app/use-deployments-workspace";
 import { usePreviewWorkspace } from "@/app/use-preview-workspace";
 import { useSettingsWorkspace } from "@/app/use-settings-workspace";
 import { useUploadWorkflow } from "@/app/use-upload-workflow";
 import type { DashboardView } from "@/app/types";
 import "./styles.css";
+
+const dashboardViewCopy = {
+  uploads: {
+    title: "Publish a static drop",
+    subtitle: "Upload a folder or zip, review validation, then share a versioned preview."
+  },
+  deployments: {
+    title: "Published drops",
+    subtitle: "Everything you have published, with the latest version and activity at a glance."
+  },
+  settings: {
+    title: "Settings",
+    subtitle: "Manage namespaces, publishers, and CLI connections."
+  },
+  device: {
+    title: "Approve CLI connection",
+    subtitle: "Confirm the request opened by the CLI, then return to the terminal."
+  }
+} satisfies Record<DashboardView, { title: string; subtitle: string }>;
 
 function App() {
   const previewRoute = useMemo(() => parsePreviewRoute(location.pathname, location.search), []);
@@ -26,6 +47,7 @@ function App() {
   const upload = useUploadWorkflow({ session: auth.session, setStatus, onPublished: preview.handlePublished });
   const settings = useSettingsWorkspace({ setStatus });
   const device = useDeviceApproval({ setStatus, loadConnections: settings.loadConnections });
+  const deployments = useDeploymentsWorkspace({ active: view === "deployments", setStatus });
 
   useEffect(() => {
     if (view === "device" && auth.session?.authenticated && device.deviceCode) {
@@ -34,24 +56,7 @@ function App() {
   }, [view, auth.session?.authenticated, device.deviceCode]);
 
   const activeSidebarItem = view === "uploads" && (preview.publish || previewRoute) ? "previews" : view;
-  const pageTitle = previewRoute
-    ? `/${previewRoute.namespace}/${previewRoute.slug}`
-    : view === "settings"
-      ? "Settings"
-      : view === "device"
-        ? "Approve CLI connection"
-        : preview.publish
-          ? "Preview and annotate"
-          : "Publish a static drop";
-  const pageSubtitle = previewRoute
-    ? "Review the live preview, versions, and annotations."
-    : view === "settings"
-      ? "Manage namespaces, publishers, and CLI connections."
-      : view === "device"
-        ? "Confirm the request opened by the CLI, then return to the terminal."
-        : preview.publish
-          ? "Inspect the published preview, switch versions, and leave review notes."
-          : "Upload a folder or zip, review validation, then share a versioned preview.";
+  const { title: pageTitle, subtitle: pageSubtitle } = dashboardViewCopy[view];
   const statusLabel = status || (auth.session ? "Idle" : "Checking session");
   const hasReviewWorkspace = Boolean(preview.publish || previewRoute || upload.lastPublished);
 
@@ -63,6 +68,79 @@ function App() {
   async function showConnections() {
     setView("settings");
     await settings.showConnections();
+  }
+
+  function renderDashboardView() {
+    switch (view) {
+      case "uploads":
+        return (
+          <UploadWorkspace
+            files={upload.files}
+            uploadDragging={upload.uploadDragging}
+            setUploadDragging={upload.setUploadDragging}
+            uploadErrors={upload.uploadErrors}
+            folderInputRef={upload.folderInputRef}
+            zipInputRef={upload.zipInputRef}
+            acceptUploadFiles={upload.acceptUploadFiles}
+            clearUploadFiles={upload.clearUploadFiles}
+            handleUploadDrop={upload.handleUploadDrop}
+            routePreview={upload.routePreview}
+            lastPublished={upload.lastPublished}
+            lastPublishedHref={upload.lastPublishedHref}
+            lastPublishedDisplayUrl={upload.lastPublishedDisplayUrl}
+            copyLastPublishedUrl={upload.copyLastPublishedUrl}
+            validation={upload.validation}
+            namespace={upload.namespace}
+            setNamespace={upload.setNamespace}
+            slug={upload.slug}
+            setSlug={upload.setSlug}
+            visibility={upload.visibility}
+            setVisibility={upload.setVisibility}
+            publishUpload={upload.publishUpload}
+            isPublishing={upload.isPublishing}
+          />
+        );
+      case "settings":
+        return (
+          <SettingsWorkspace
+            settingsTab={settings.settingsTab}
+            setSettingsTab={settings.setSettingsTab}
+            namespaces={settings.namespaces}
+            namespaceMembers={settings.namespaceMembers}
+            newNamespace={settings.newNamespace}
+            setNewNamespace={settings.setNewNamespace}
+            publisherDrafts={settings.publisherDrafts}
+            setPublisherDrafts={settings.setPublisherDrafts}
+            connections={settings.connections}
+            loadNamespaces={settings.loadNamespaces}
+            loadConnections={settings.loadConnections}
+            createCustomNamespace={createCustomNamespace}
+            addPublisher={settings.addPublisher}
+            removePublisher={settings.removePublisher}
+            revokeConnection={settings.revokeConnection}
+          />
+        );
+      case "deployments":
+        return (
+          <DeploymentsWorkspace
+            state={deployments.state}
+            loadDeployments={deployments.loadDeployments}
+            onCreateDrop={() => setView("uploads")}
+          />
+        );
+      case "device":
+        return (
+          <DeviceApprovalPanel
+            deviceCode={device.deviceCode}
+            deviceRequest={device.deviceRequest}
+            loadDeviceRequest={device.loadDeviceRequest}
+            decideDevice={device.decideDevice}
+            showConnections={showConnections}
+          />
+        );
+      default:
+        return unreachableDashboardView(view);
+    }
   }
 
   if (!auth.session) {
@@ -153,65 +231,13 @@ function App() {
       loadSettings={settings.loadSettings}
       logout={auth.logout}
     >
-      {view === "uploads" ? (
-        <UploadWorkspace
-          files={upload.files}
-          uploadDragging={upload.uploadDragging}
-          setUploadDragging={upload.setUploadDragging}
-          uploadErrors={upload.uploadErrors}
-          folderInputRef={upload.folderInputRef}
-          zipInputRef={upload.zipInputRef}
-          acceptUploadFiles={upload.acceptUploadFiles}
-          clearUploadFiles={upload.clearUploadFiles}
-          handleUploadDrop={upload.handleUploadDrop}
-          routePreview={upload.routePreview}
-          lastPublished={upload.lastPublished}
-          lastPublishedHref={upload.lastPublishedHref}
-          lastPublishedDisplayUrl={upload.lastPublishedDisplayUrl}
-          copyLastPublishedUrl={upload.copyLastPublishedUrl}
-          validation={upload.validation}
-          namespace={upload.namespace}
-          setNamespace={upload.setNamespace}
-          slug={upload.slug}
-          setSlug={upload.setSlug}
-          visibility={upload.visibility}
-          setVisibility={upload.setVisibility}
-          publishUpload={upload.publishUpload}
-          isPublishing={upload.isPublishing}
-        />
-      ) : null}
-
-      {view === "settings" ? (
-        <SettingsWorkspace
-          settingsTab={settings.settingsTab}
-          setSettingsTab={settings.setSettingsTab}
-          namespaces={settings.namespaces}
-          namespaceMembers={settings.namespaceMembers}
-          newNamespace={settings.newNamespace}
-          setNewNamespace={settings.setNewNamespace}
-          publisherDrafts={settings.publisherDrafts}
-          setPublisherDrafts={settings.setPublisherDrafts}
-          connections={settings.connections}
-          loadNamespaces={settings.loadNamespaces}
-          loadConnections={settings.loadConnections}
-          createCustomNamespace={createCustomNamespace}
-          addPublisher={settings.addPublisher}
-          removePublisher={settings.removePublisher}
-          revokeConnection={settings.revokeConnection}
-        />
-      ) : null}
-
-      {view === "device" ? (
-        <DeviceApprovalPanel
-          deviceCode={device.deviceCode}
-          deviceRequest={device.deviceRequest}
-          loadDeviceRequest={device.loadDeviceRequest}
-          decideDevice={device.decideDevice}
-          showConnections={showConnections}
-        />
-      ) : null}
+      {renderDashboardView()}
     </DashboardShell>
   );
+}
+
+function unreachableDashboardView(view: never): never {
+  throw new Error(`Unsupported dashboard view: ${view}`);
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -22,6 +22,10 @@ export interface CreateVersionInput {
   files: Array<FileManifestEntry & { storageKey: string }>;
 }
 
+export type DeviceTokenExchangeResult =
+  | { status: "issued"; expiresAt: string }
+  | { status: "pending" | "rejected" | "expired" | "already_exchanged"; expiresAt: string };
+
 export interface OpenDropRepository {
   migrate(): Promise<void>;
   getOrCreateUser(identity: IdentityInput): Promise<UserRecord>;
@@ -48,9 +52,9 @@ export interface OpenDropRepository {
     deviceName: string | null;
     expiresAt: string;
   } | null>;
-  approveDeviceAuthorization(userCode: string, userId: string, tokenHash: string, tokenPlain: string): Promise<void>;
+  approveDeviceAuthorization(userCode: string, userId: string): Promise<void>;
   rejectDeviceAuthorization(userCode: string, userId: string): Promise<void>;
-  exchangeDeviceAuthorization(deviceCodeHash: string): Promise<{ status: string; userId: string | null; tokenPlain: string | null; expiresAt: string } | null>;
+  exchangeDeviceAuthorization(deviceCodeHash: string, tokenHash: string): Promise<DeviceTokenExchangeResult | null>;
   getNamespace(name: string): Promise<NamespaceRecord | null>;
   listNamespacesForUser(userId: string): Promise<NamespaceAccessRecord[]>;
   createNamespace(name: string, ownerUserId: string): Promise<NamespaceAccessRecord>;
@@ -59,6 +63,7 @@ export interface OpenDropRepository {
   removeNamespacePublisher(namespace: string, ownerUserId: string, memberUserId: string): Promise<void>;
   userCanPublishNamespace(userId: string, namespace: string): Promise<boolean>;
   getDeploymentFamily(namespace: string, slug: string): Promise<DeploymentFamilyRecord | null>;
+  listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]>;
   createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion>;
   setDeploymentVisibility(namespace: string, slug: string, visibility: Visibility, userId: string): Promise<DeploymentFamilyRecord>;
   restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion>;

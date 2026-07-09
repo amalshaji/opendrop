@@ -80,7 +80,7 @@ export type AnnotationRecord = {
 
 export type AnnotationMode = "browse" | "comment" | "highlight";
 
-export type DashboardView = "uploads" | "settings" | "device";
+export type DashboardView = "uploads" | "deployments" | "settings" | "device";
 
 export type SettingsTab = "namespaces" | "connections";
 

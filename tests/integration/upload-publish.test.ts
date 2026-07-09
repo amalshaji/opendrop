@@ -50,9 +50,93 @@ describe("upload publishing", () => {
     const response = await app.fetch(new Request("https://drop.example.test/team/demo/"));
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-security-policy")).toBe("sandbox allow-scripts allow-forms allow-popups");
+    expect(response.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=60, must-revalidate");
     expect(await response.text()).toContain("<h1>Home</h1>");
+
+    const versionId = (await publishResponse.json()).version.id;
+    const pinned = await app.fetch(new Request(`https://drop.example.test/team/demo/versions/${versionId}/`));
+    expect(pinned.status).toBe(200);
+    expect(pinned.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("never makes private artifacts publicly cacheable, including pinned versions", async () => {
+    const repo = new UploadTestRepo();
+    const storage = new MemoryArtifactStorage();
+    const app = testApp(repo, storage);
+    registerDeploymentPageRoutes(app, { repo: repo.asRepository(), storage, authConfig });
+    const publishResponse = await app.fetch(publishRequest({ visibility: "private" }));
+    const versionId = (await publishResponse.json()).version.id;
+
+    for (const path of [`/team/demo/`, `/team/demo/versions/${versionId}/`]) {
+      const response = await app.fetch(new Request(`https://drop.example.test${path}`, {
+        headers: { "x-opendrop-email": "dev@example.com" }
+      }));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+    }
+  });
+
+  it("serves SVG as a passive sandboxed document using the path-derived MIME type", async () => {
+    const repo = new UploadTestRepo();
+    const storage = new MemoryArtifactStorage();
+    const app = testApp(repo, storage);
+    registerDeploymentPageRoutes(app, { repo: repo.asRepository(), storage, authConfig });
+    await app.fetch(publishRequest({ svg: true }));
+
+    const response = await app.fetch(new Request("https://drop.example.test/team/demo/logo.svg"));
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    expect(response.headers.get("content-security-policy")).toBe("sandbox");
+  });
+
+  it("labels fetched page HTML and annotations as untrusted agent input", async () => {
+    const repo = new UploadTestRepo();
+    const storage = new MemoryArtifactStorage();
+    const app = testApp(repo, storage);
+    await app.fetch(publishRequest());
+
+    const response = await app.fetch(new Request("https://drop.example.test/api/deployments/team/demo/page?path=/"));
+    expect(await response.json()).toMatchObject({
+      trust: {
+        html: "untrusted-uploaded-content",
+        annotations: "untrusted-user-content"
+      }
+    });
+  });
+
+  it("returns the narrow published-deployments contract", async () => {
+    const repo = new UploadTestRepo();
+    const app = testApp(repo, new MemoryArtifactStorage());
+    const publishResponse = await app.fetch(publishRequest());
+    const published = (await publishResponse.json()) as { version: { id: string } };
+
+    const response = await app.fetch(
+      new Request("https://drop.example.test/api/deployments", {
+        headers: { "x-opendrop-email": "dev@example.com" }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      deployments: [
+        {
+          family: {
+            id: "fam_1",
+            namespaceName: "team",
+            slug: "demo",
+            visibility: "public",
+            updatedAt: new Date(0).toISOString()
+          },
+          version: {
+            id: published.version.id,
+            versionNumber: 1,
+            fileCount: 1,
+            totalBytes: 13
+          }
+        }
+      ]
+    });
   });
 });
 
@@ -68,12 +152,15 @@ function testApp(repo: UploadTestRepo, storage: ArtifactStorage) {
   });
 }
 
-function publishRequest(): Request {
+function publishRequest(options: { visibility?: "public" | "private"; svg?: boolean } = {}): Request {
   const form = new FormData();
   form.set("namespace", "team");
   form.set("slug", "demo");
-  form.set("visibility", "public");
+  form.set("visibility", options.visibility ?? "public");
   form.append("files", new Blob(["<h1>Home</h1>"], { type: "text/html" }), "index.html");
+  if (options.svg) {
+    form.append("files", new Blob(["<svg><script>throw new Error('must not run')</script></svg>"], { type: "text/html" }), "logo.svg");
+  }
   return new Request("https://drop.example.test/api/uploads/publish", {
     method: "POST",
     headers: { "x-opendrop-email": "dev@example.com" },
@@ -97,8 +184,10 @@ class UploadTestRepo {
       getOrCreateUser: async (identity) => this.getOrCreateUser(identity),
       userCanPublishNamespace: async () => true,
       createDeploymentVersion: async (input) => this.createDeploymentVersion(input),
+      listDeploymentsForUser: async () => (this.deployment ? [this.deployment] : []),
       getDeploymentVersion: async () => this.deployment,
-      getDeploymentFile: async (versionId, path) => this.files.get(`${versionId}:${path}`) ?? null
+      getDeploymentFile: async (versionId, path) => this.files.get(`${versionId}:${path}`) ?? null,
+      listAnnotations: async () => []
     } as unknown as OpenDropRepository;
   }
 

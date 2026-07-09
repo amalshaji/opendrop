@@ -7,7 +7,6 @@ services:
       NODE_ENV: production
       PORT: 3000
       BETTER_AUTH_URL: http://127.0.0.1:${OPENDROP_E2E_SERVER_PORT:-43300}
-      BETTER_AUTH_SECRET: opendrop-e2e-secret-change-before-production
       OPENDROP_AUTH_MODE: dev
       OPENDROP_DB_DRIVER: sqlite
       SQLITE_PATH: /data/opendrop.sqlite
@@ -31,8 +30,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
-      - "19000:9000"
-      - "19001:9001"
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
     environment:
       MINIO_ROOT_USER: opendrop
       MINIO_ROOT_PASSWORD: opendrop-secret
@@ -52,7 +51,7 @@ services:
   postgres:
     image: postgres:17-alpine
     ports:
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     environment:
       POSTGRES_USER: opendrop
       POSTGRES_PASSWORD: opendrop
