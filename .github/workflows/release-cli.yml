@@ -1,0 +1,48 @@
+name: Release CLI
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: read
+
+jobs:
+  release-cli:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' && contains(github.event.pull_request.labels.*.name, 'release:cli')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - name: Validate release labels
+        run: bun scripts/release/labels.mjs '${{ toJson(github.event.pull_request.labels.*.name) }}'
+      - name: Publish CLI
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TARGET: cli
+          RELEASE_PR_NUMBER: ${{ github.event.pull_request.number }}
+          RELEASE_PR_TITLE: ${{ github.event.pull_request.title }}
+          RELEASE_PR_BODY: ${{ github.event.pull_request.body }}
+          RELEASE_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          VERSION=$(bun -e "console.log(require('./apps/cli/package.json').version)")
+          bun run --cwd apps/cli build
+          cd apps/cli
+          npm publish --access public --provenance
+          cd ../..
+          git tag cli-v$VERSION
+          git push origin cli-v$VERSION
+          RELEASE_VERSION=$VERSION bun scripts/release/notes.ts > release-notes.md
+          gh release create cli-v$VERSION --title "OpenDrop CLI v$VERSION" --notes-file release-notes.md
