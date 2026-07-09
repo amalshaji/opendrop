@@ -1,8 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const server = JSON.parse(readFileSync("apps/server/package.json", "utf8"));
 const cli = JSON.parse(readFileSync("apps/cli/package.json", "utf8"));
+
+if (existsSync(".github/workflows/release.yml")) throw new Error("Server and CLI releases must stay split across separate workflows.");
+if (!existsSync(".github/workflows/release-server.yml")) throw new Error("Missing server release workflow.");
+if (!existsSync(".github/workflows/release-cli.yml")) throw new Error("Missing CLI release workflow.");
 
 if (!server.version) throw new Error("Missing server version.");
 if (cli.name !== "opendrop") throw new Error("CLI package must publish as opendrop.");
