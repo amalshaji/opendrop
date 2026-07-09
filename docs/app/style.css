@@ -128,7 +128,14 @@ code {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+@media (prefers-color-scheme: dark) {
+  .docsBrandMark {
+    border-color: #2b302c;
+    background: #060606;
+  }
 }
 
 /* Marketing landing page */

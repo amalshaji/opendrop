@@ -216,6 +216,14 @@
   background: #ffffff;
 }
 
+@media (prefers-color-scheme: dark) {
+  .brandMark {
+    border-color: #2b302c;
+    background: #060606;
+    box-shadow: none;
+  }
+}
+
 .sidebarAccount {
   width: 100%;
   display: grid;
