@@ -1,9 +1,4 @@
 import {
-  annotationShapeSchema,
-  annotationTagsSchema,
-  annotationViewportSchema,
-  namespaceCandidateForEmail,
-  namespaceCollisionSuffix,
   nowIso,
   randomId,
   validateNamespace
@@ -24,7 +19,16 @@ import type {
   NamespaceRecord,
   UserRecord
 } from "./types";
-import { mapAnnotation, mapNamespace, mapNamespaceAccess, mapNamespaceMember, mapUser, parseJsonColumn } from "./mappers";
+import {
+  allocateNamespaceForEmail,
+  annotationInsertValues,
+  mapDbAnnotation,
+  mapDeploymentFamily,
+  mapDeploymentFile,
+  mapDeploymentVersion,
+  namespaceAccessRecords,
+  namespaceMemberRecord
+} from "./domain";
 import { sqliteOpenDropSchema } from "./schema";
 
 export interface D1PreparedStatementLike {
@@ -39,46 +43,6 @@ export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
   exec?(query: string): Promise<unknown>;
 }
-
-function mapDrizzleFamily(row: typeof sqliteOpenDropSchema.deploymentFamilies.$inferSelect): DeploymentFamilyRecord {
-  return {
-    ...row,
-    visibility: row.visibility as Visibility
-  };
-}
-
-function mapDrizzleVersion(row: typeof sqliteOpenDropSchema.deploymentVersions.$inferSelect): DeploymentVersionRecord {
-  return {
-    ...row,
-    totalBytes: Number(row.totalBytes)
-  };
-}
-
-function mapDrizzleFile(row: typeof sqliteOpenDropSchema.deploymentFiles.$inferSelect): DeploymentFileRecord {
-  return {
-    ...row,
-    lineCount: row.lineCount ?? undefined
-  };
-}
-
-function mapDrizzleAnnotation(row: typeof sqliteOpenDropSchema.annotations.$inferSelect): AnnotationRecord {
-  return {
-    id: row.id,
-    familyId: row.familyId,
-    versionId: row.versionId,
-    parentAnnotationId: row.parentAnnotationId,
-    pagePath: row.pagePath,
-    authorUserId: row.authorUserId,
-    body: row.body,
-    tags: parseJsonColumn(annotationTagsSchema, row.tagsJson),
-    shape: parseJsonColumn(annotationShapeSchema, row.shapeJson),
-    viewport: parseJsonColumn(annotationViewportSchema, row.viewportJson),
-    resolvedAt: row.resolvedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt
-  };
-}
-
 
 export class D1OpenDropRepository implements OpenDropRepository {
   private orm: ReturnType<typeof drizzle<typeof sqliteOpenDropSchema>>;
@@ -389,10 +353,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .innerJoin(sqliteOpenDropSchema.namespaces, eq(sqliteOpenDropSchema.namespaceMembers.namespaceId, sqliteOpenDropSchema.namespaces.id))
       .where(and(eq(sqliteOpenDropSchema.namespaceMembers.userId, userId), ne(sqliteOpenDropSchema.namespaces.ownerUserId, userId)))
       .all();
-    return [
-      ...owned.map((namespace) => ({ ...namespace, role: "owner" as const })),
-      ...published.map((namespace) => ({ ...namespace, role: namespace.role === "owner" ? ("owner" as const) : ("publisher" as const) }))
-    ].sort((a, b) => a.name.localeCompare(b.name));
+    return namespaceAccessRecords(owned, published);
   }
 
   async createNamespace(name: string, ownerUserId: string): Promise<NamespaceAccessRecord> {
@@ -438,7 +399,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .all();
     return [
       { namespaceId: record.id, userId: owner.userId, email: owner.email, name: owner.name, role: "owner", createdAt: record.createdAt },
-      ...members.map((member) => ({ ...member, role: member.role === "owner" ? ("owner" as const) : ("publisher" as const) }))
+      ...members.map(namespaceMemberRecord)
     ];
   }
 
@@ -477,7 +438,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.namespaceMembers.namespaceId, record.id), eq(sqliteOpenDropSchema.namespaceMembers.userId, user.id)))
       .get();
     if (!row) throw new Error("Expected database row was not found.");
-    return { ...row, role: row.role === "owner" ? "owner" : "publisher" };
+    return namespaceMemberRecord(row);
   }
 
   async removeNamespacePublisher(namespace: string, ownerUserId: string, memberUserId: string): Promise<void> {
@@ -522,7 +483,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .from(sqliteOpenDropSchema.deploymentFamilies)
       .where(and(eq(sqliteOpenDropSchema.deploymentFamilies.namespaceName, namespace), eq(sqliteOpenDropSchema.deploymentFamilies.slug, slug)))
       .get();
-    return row ? mapDrizzleFamily(row) : null;
+    return row ? mapDeploymentFamily(row) : null;
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {
@@ -618,8 +579,8 @@ export class D1OpenDropRepository implements OpenDropRepository {
       const version = await tx.select().from(sqliteOpenDropSchema.deploymentVersions).where(eq(sqliteOpenDropSchema.deploymentVersions.id, versionId)).get();
       if (!nextFamily || !version) throw new Error("Deployment version could not be created.");
       return {
-        family: mapDrizzleFamily(nextFamily),
-        version: mapDrizzleVersion(version)
+        family: mapDeploymentFamily(nextFamily),
+        version: mapDeploymentVersion(version)
       };
     });
   }
@@ -634,7 +595,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(eq(sqliteOpenDropSchema.deploymentFamilies.id, family.id));
     const row = await this.orm.select().from(sqliteOpenDropSchema.deploymentFamilies).where(eq(sqliteOpenDropSchema.deploymentFamilies.id, family.id)).get();
     if (!row) throw new Error("Deployment not found.");
-    return mapDrizzleFamily(row);
+    return mapDeploymentFamily(row);
   }
 
   async restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion> {
@@ -654,8 +615,8 @@ export class D1OpenDropRepository implements OpenDropRepository {
     const familyRow = await this.orm.select().from(sqliteOpenDropSchema.deploymentFamilies).where(eq(sqliteOpenDropSchema.deploymentFamilies.id, family.id)).get();
     if (!familyRow) throw new Error("Deployment not found.");
     return {
-      family: mapDrizzleFamily(familyRow),
-      version: mapDrizzleVersion(versionRow)
+      family: mapDeploymentFamily(familyRow),
+      version: mapDeploymentVersion(versionRow)
     };
   }
 
@@ -670,7 +631,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.deploymentVersions.id, selectedVersionId), eq(sqliteOpenDropSchema.deploymentVersions.familyId, family.id)))
       .get();
     if (!versionRow) return null;
-    return { family, version: mapDrizzleVersion(versionRow) };
+    return { family, version: mapDeploymentVersion(versionRow) };
   }
 
   async listDeploymentVersions(namespace: string, slug: string): Promise<DeploymentVersionRecord[]> {
@@ -681,7 +642,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .from(sqliteOpenDropSchema.deploymentVersions)
       .where(eq(sqliteOpenDropSchema.deploymentVersions.familyId, family.id))
       .orderBy(desc(sqliteOpenDropSchema.deploymentVersions.versionNumber));
-    return rows.map(mapDrizzleVersion);
+    return rows.map(mapDeploymentVersion);
   }
 
   async listDeploymentFiles(versionId: string): Promise<DeploymentFileRecord[]> {
@@ -690,7 +651,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .from(sqliteOpenDropSchema.deploymentFiles)
       .where(eq(sqliteOpenDropSchema.deploymentFiles.versionId, versionId))
       .orderBy(asc(sqliteOpenDropSchema.deploymentFiles.path));
-    return rows.map(mapDrizzleFile);
+    return rows.map(mapDeploymentFile);
   }
 
   async getDeploymentFile(versionId: string, path: string): Promise<DeploymentFileRecord | null> {
@@ -699,7 +660,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .from(sqliteOpenDropSchema.deploymentFiles)
       .where(and(eq(sqliteOpenDropSchema.deploymentFiles.versionId, versionId), eq(sqliteOpenDropSchema.deploymentFiles.path, path)))
       .get();
-    return row ? mapDrizzleFile(row) : null;
+    return row ? mapDeploymentFile(row) : null;
   }
 
   async createAnnotation(namespace: string, slug: string, input: AnnotationInput, userId: string): Promise<AnnotationRecord> {
@@ -710,24 +671,10 @@ export class D1OpenDropRepository implements OpenDropRepository {
     }
     const now = nowIso();
     const id = randomId("ann_");
-    await this.orm.insert(sqliteOpenDropSchema.annotations).values({
-      id,
-      familyId: deployment.family.id,
-      versionId: deployment.version.id,
-      parentAnnotationId: input.parentAnnotationId ?? null,
-      pagePath: input.pagePath,
-      authorUserId: userId,
-      body: input.body,
-      tagsJson: JSON.stringify(input.tags),
-      shapeJson: JSON.stringify(input.shape),
-      viewportJson: JSON.stringify(input.viewport),
-      resolvedAt: null,
-      createdAt: now,
-      updatedAt: now
-    });
+    await this.orm.insert(sqliteOpenDropSchema.annotations).values(annotationInsertValues(deployment, input, userId, id, now));
     const row = await this.orm.select().from(sqliteOpenDropSchema.annotations).where(eq(sqliteOpenDropSchema.annotations.id, id)).get();
     if (!row) throw new Error("Annotation not found.");
-    return mapDrizzleAnnotation(row);
+    return mapDbAnnotation(row);
   }
 
   async setAnnotationResolved(namespace: string, slug: string, annotationId: string, resolved: boolean, _userId: string): Promise<AnnotationRecord> {
@@ -744,7 +691,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.annotations.id, annotationId), eq(sqliteOpenDropSchema.annotations.familyId, family.id)))
       .get();
     if (!row) throw new Error("Annotation not found.");
-    return mapDrizzleAnnotation(row);
+    return mapDbAnnotation(row);
   }
 
   async listAnnotations(namespace: string, slug: string, versionId: string, pagePath?: string): Promise<AnnotationRecord[]> {
@@ -762,23 +709,19 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .from(sqliteOpenDropSchema.annotations)
       .where(where)
       .orderBy(asc(sqliteOpenDropSchema.annotations.createdAt));
-    return rows.map(mapDrizzleAnnotation);
+    return rows.map(mapDbAnnotation);
   }
 
   private async allocateNamespace(email: string): Promise<string> {
-    const seed = namespaceCandidateForEmail(email);
-    const validSeed = validateNamespace(seed) ? `user-${namespaceCollisionSuffix()}` : seed;
-    let candidate = validSeed;
-    while (
-      await this.orm
-        .select({ id: sqliteOpenDropSchema.namespaces.id })
-        .from(sqliteOpenDropSchema.namespaces)
-        .where(eq(sqliteOpenDropSchema.namespaces.name, candidate))
-        .get()
-    ) {
-      candidate = `${validSeed.slice(0, 34)}-${namespaceCollisionSuffix()}`;
-    }
-    return candidate;
+    return allocateNamespaceForEmail(email, async (candidate) =>
+      Boolean(
+        await this.orm
+          .select({ id: sqliteOpenDropSchema.namespaces.id })
+          .from(sqliteOpenDropSchema.namespaces)
+          .where(eq(sqliteOpenDropSchema.namespaces.name, candidate))
+          .get()
+      )
+    );
   }
 
   private async getOwnedNamespace(name: string, ownerUserId: string): Promise<NamespaceRecord> {

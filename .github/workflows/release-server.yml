@@ -1,0 +1,62 @@
+name: Release Server
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      semver:
+        description: Semver category for this release.
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      notes:
+        description: Optional release notes body.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+jobs:
+  release-server:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' && contains(github.event.pull_request.labels.*.name, 'release:server'))
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_LABELS: ${{ github.event_name == 'workflow_dispatch' && format('["release:server","semver:{0}"]', inputs.semver) || toJson(github.event.pull_request.labels.*.name) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Validate release labels
+        run: bun scripts/release/labels.mjs "$RELEASE_LABELS"
+      - name: Publish server image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TARGET: server
+          RELEASE_PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+          RELEASE_PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || 'Manual Server release' }}
+          RELEASE_PR_BODY: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || inputs.notes }}
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/opendrop-server
+        run: |
+          docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}'
+          VERSION=$(bun -e "console.log(require('./apps/server/package.json').version)")
+          docker build -t ghcr.io/${{ github.repository_owner }}/opendrop-server:$VERSION -t ghcr.io/${{ github.repository_owner }}/opendrop-server:latest .
+          docker push ghcr.io/${{ github.repository_owner }}/opendrop-server:$VERSION
+          docker push ghcr.io/${{ github.repository_owner }}/opendrop-server:latest
+          git tag server-v$VERSION
+          git push origin server-v$VERSION
+          RELEASE_VERSION=$VERSION bun scripts/release/notes.ts > release-notes.md
+          gh release create server-v$VERSION --title "OpenDrop Server v$VERSION" --notes-file release-notes.md

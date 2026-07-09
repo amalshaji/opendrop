@@ -2,6 +2,10 @@
   <img src="./apps/web/public/opendrop-logo.svg" alt="OpenDrop logo" width="56">
 </p>
 
+<p align="center">
+  <img src="./docs/public/readme-demo.gif" alt="OpenDrop demo: publish static previews and collect review comments" width="100%">
+</p>
+
 # OpenDrop
 
 OpenDrop is an open-source TypeScript app for publishing static HTML drops with validation, versioned URLs, public/private previews, and review annotations.
@@ -64,6 +68,7 @@ V1 supports:
 bun install
 cp .env.example .env
 docker compose up -d minio
+docker compose up createbuckets
 bun run dev
 ```
 

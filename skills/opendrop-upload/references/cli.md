@@ -11,4 +11,4 @@ opendrop upload ./site.zip --json
 Successful output includes:
 
 - latest URL: `https://host.example/ns/slug`
-- version URL: `https://host.example/ns/slug/versions/ver_...`
+- version URL: `https://host.example/ns/slug?version=ver_...`

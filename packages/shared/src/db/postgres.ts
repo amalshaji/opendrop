@@ -5,11 +5,6 @@ import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
-  annotationShapeSchema,
-  annotationTagsSchema,
-  annotationViewportSchema,
-  namespaceCandidateForEmail,
-  namespaceCollisionSuffix,
   nowIso,
   randomId,
   validateNamespace
@@ -28,50 +23,19 @@ import type {
   NamespaceRecord,
   UserRecord
 } from "./types";
-import { mapAnnotation, mapNamespace, mapNamespaceAccess, mapNamespaceMember, mapUser, parseJsonColumn } from "./mappers";
+import {
+  allocateNamespaceForEmail,
+  annotationInsertValues,
+  mapDbAnnotation,
+  mapDeploymentFamily,
+  mapDeploymentFile,
+  mapDeploymentVersion,
+  namespaceAccessRecords,
+  namespaceMemberRecord
+} from "./domain";
 import { pgOpenDropSchema } from "./schema";
 
 const migrationsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../migrations");
-
-function mapDrizzleFamily(row: typeof pgOpenDropSchema.deploymentFamilies.$inferSelect): DeploymentFamilyRecord {
-  return {
-    ...row,
-    visibility: row.visibility as Visibility
-  };
-}
-
-function mapDrizzleVersion(row: typeof pgOpenDropSchema.deploymentVersions.$inferSelect): DeploymentVersionRecord {
-  return {
-    ...row,
-    totalBytes: Number(row.totalBytes)
-  };
-}
-
-function mapDrizzleFile(row: typeof pgOpenDropSchema.deploymentFiles.$inferSelect): DeploymentFileRecord {
-  return {
-    ...row,
-    lineCount: row.lineCount ?? undefined
-  };
-}
-
-function mapDrizzleAnnotation(row: typeof pgOpenDropSchema.annotations.$inferSelect): AnnotationRecord {
-  return {
-    id: row.id,
-    familyId: row.familyId,
-    versionId: row.versionId,
-    parentAnnotationId: row.parentAnnotationId,
-    pagePath: row.pagePath,
-    authorUserId: row.authorUserId,
-    body: row.body,
-    tags: parseJsonColumn(annotationTagsSchema, row.tagsJson),
-    shape: parseJsonColumn(annotationShapeSchema, row.shapeJson),
-    viewport: parseJsonColumn(annotationViewportSchema, row.viewportJson),
-    resolvedAt: row.resolvedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt
-  };
-}
-
 
 export class PostgresOpenDropRepository implements OpenDropRepository {
   private pool: Pool;
@@ -392,10 +356,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .from(pgOpenDropSchema.namespaceMembers)
       .innerJoin(pgOpenDropSchema.namespaces, eq(pgOpenDropSchema.namespaceMembers.namespaceId, pgOpenDropSchema.namespaces.id))
       .where(and(eq(pgOpenDropSchema.namespaceMembers.userId, userId), ne(pgOpenDropSchema.namespaces.ownerUserId, userId)));
-    return [
-      ...owned.map((namespace) => ({ ...namespace, role: "owner" as const })),
-      ...published.map((namespace) => ({ ...namespace, role: namespace.role === "owner" ? ("owner" as const) : ("publisher" as const) }))
-    ].sort((a, b) => a.name.localeCompare(b.name));
+    return namespaceAccessRecords(owned, published);
   }
 
   async createNamespace(name: string, ownerUserId: string): Promise<NamespaceAccessRecord> {
@@ -440,7 +401,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .orderBy(asc(pgOpenDropSchema.users.email));
     return [
       { namespaceId: record.id, userId: owner.userId, email: owner.email, name: owner.name, role: "owner", createdAt: record.createdAt },
-      ...members.map((member) => ({ ...member, role: member.role === "owner" ? ("owner" as const) : ("publisher" as const) }))
+      ...members.map(namespaceMemberRecord)
     ];
   }
 
@@ -479,7 +440,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.namespaceMembers.namespaceId, record.id), eq(pgOpenDropSchema.namespaceMembers.userId, user.id)))
       .limit(1);
     if (!row) throw new Error("Expected database row was not found.");
-    return { ...row, role: row.role === "owner" ? "owner" : "publisher" };
+    return namespaceMemberRecord(row);
   }
 
   async removeNamespacePublisher(namespace: string, ownerUserId: string, memberUserId: string): Promise<void> {
@@ -524,7 +485,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .from(pgOpenDropSchema.deploymentFamilies)
       .where(and(eq(pgOpenDropSchema.deploymentFamilies.namespaceName, namespace), eq(pgOpenDropSchema.deploymentFamilies.slug, slug)))
       .limit(1);
-    return row ? mapDrizzleFamily(row) : null;
+    return row ? mapDeploymentFamily(row) : null;
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {
@@ -619,8 +580,8 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       const [version] = await tx.select().from(pgOpenDropSchema.deploymentVersions).where(eq(pgOpenDropSchema.deploymentVersions.id, versionId)).limit(1);
       if (!nextFamily || !version) throw new Error("Deployment version could not be created.");
       return {
-        family: mapDrizzleFamily(nextFamily),
-        version: mapDrizzleVersion(version)
+        family: mapDeploymentFamily(nextFamily),
+        version: mapDeploymentVersion(version)
       };
     });
   }
@@ -635,7 +596,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(eq(pgOpenDropSchema.deploymentFamilies.id, family.id));
     const [row] = await this.orm.select().from(pgOpenDropSchema.deploymentFamilies).where(eq(pgOpenDropSchema.deploymentFamilies.id, family.id)).limit(1);
     if (!row) throw new Error("Deployment not found.");
-    return mapDrizzleFamily(row);
+    return mapDeploymentFamily(row);
   }
 
   async restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion> {
@@ -655,8 +616,8 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     const [familyRow] = await this.orm.select().from(pgOpenDropSchema.deploymentFamilies).where(eq(pgOpenDropSchema.deploymentFamilies.id, family.id)).limit(1);
     if (!familyRow) throw new Error("Deployment not found.");
     return {
-      family: mapDrizzleFamily(familyRow),
-      version: mapDrizzleVersion(versionRow)
+      family: mapDeploymentFamily(familyRow),
+      version: mapDeploymentVersion(versionRow)
     };
   }
 
@@ -671,7 +632,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.deploymentVersions.id, selectedVersionId), eq(pgOpenDropSchema.deploymentVersions.familyId, family.id)))
       .limit(1);
     if (!versionRow) return null;
-    return { family, version: mapDrizzleVersion(versionRow) };
+    return { family, version: mapDeploymentVersion(versionRow) };
   }
 
   async listDeploymentVersions(namespace: string, slug: string): Promise<DeploymentVersionRecord[]> {
@@ -682,7 +643,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .from(pgOpenDropSchema.deploymentVersions)
       .where(eq(pgOpenDropSchema.deploymentVersions.familyId, family.id))
       .orderBy(desc(pgOpenDropSchema.deploymentVersions.versionNumber));
-    return rows.map(mapDrizzleVersion);
+    return rows.map(mapDeploymentVersion);
   }
 
   async listDeploymentFiles(versionId: string): Promise<DeploymentFileRecord[]> {
@@ -691,7 +652,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .from(pgOpenDropSchema.deploymentFiles)
       .where(eq(pgOpenDropSchema.deploymentFiles.versionId, versionId))
       .orderBy(asc(pgOpenDropSchema.deploymentFiles.path));
-    return rows.map(mapDrizzleFile);
+    return rows.map(mapDeploymentFile);
   }
 
   async getDeploymentFile(versionId: string, path: string): Promise<DeploymentFileRecord | null> {
@@ -700,7 +661,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .from(pgOpenDropSchema.deploymentFiles)
       .where(and(eq(pgOpenDropSchema.deploymentFiles.versionId, versionId), eq(pgOpenDropSchema.deploymentFiles.path, path)))
       .limit(1);
-    return row ? mapDrizzleFile(row) : null;
+    return row ? mapDeploymentFile(row) : null;
   }
 
   async createAnnotation(namespace: string, slug: string, input: AnnotationInput, userId: string): Promise<AnnotationRecord> {
@@ -711,24 +672,10 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     }
     const now = nowIso();
     const id = randomId("ann_");
-    await this.orm.insert(pgOpenDropSchema.annotations).values({
-      id,
-      familyId: deployment.family.id,
-      versionId: deployment.version.id,
-      parentAnnotationId: input.parentAnnotationId ?? null,
-      pagePath: input.pagePath,
-      authorUserId: userId,
-      body: input.body,
-      tagsJson: JSON.stringify(input.tags),
-      shapeJson: JSON.stringify(input.shape),
-      viewportJson: JSON.stringify(input.viewport),
-      resolvedAt: null,
-      createdAt: now,
-      updatedAt: now
-    });
+    await this.orm.insert(pgOpenDropSchema.annotations).values(annotationInsertValues(deployment, input, userId, id, now));
     const [row] = await this.orm.select().from(pgOpenDropSchema.annotations).where(eq(pgOpenDropSchema.annotations.id, id)).limit(1);
     if (!row) throw new Error("Annotation not found.");
-    return mapDrizzleAnnotation(row);
+    return mapDbAnnotation(row);
   }
 
   async setAnnotationResolved(namespace: string, slug: string, annotationId: string, resolved: boolean, _userId: string): Promise<AnnotationRecord> {
@@ -745,7 +692,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.annotations.id, annotationId), eq(pgOpenDropSchema.annotations.familyId, family.id)))
       .limit(1);
     if (!row) throw new Error("Annotation not found.");
-    return mapDrizzleAnnotation(row);
+    return mapDbAnnotation(row);
   }
 
   async listAnnotations(namespace: string, slug: string, versionId: string, pagePath?: string): Promise<AnnotationRecord[]> {
@@ -755,7 +702,7 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       ? and(eq(pgOpenDropSchema.annotations.familyId, family.id), eq(pgOpenDropSchema.annotations.versionId, versionId), eq(pgOpenDropSchema.annotations.pagePath, pagePath))
       : and(eq(pgOpenDropSchema.annotations.familyId, family.id), eq(pgOpenDropSchema.annotations.versionId, versionId));
     const rows = await this.orm.select().from(pgOpenDropSchema.annotations).where(where).orderBy(asc(pgOpenDropSchema.annotations.createdAt));
-    return rows.map(mapDrizzleAnnotation);
+    return rows.map(mapDbAnnotation);
   }
 
   private async getOwnedNamespace(name: string, ownerUserId: string): Promise<NamespaceRecord> {
@@ -782,21 +729,17 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
   }
 
   private async allocateNamespace(email: string): Promise<string> {
-    const seed = namespaceCandidateForEmail(email);
-    const validSeed = validateNamespace(seed) ? `user-${namespaceCollisionSuffix()}` : seed;
-    let candidate = validSeed;
-    while (
-      (
-        await this.orm
-          .select({ id: pgOpenDropSchema.namespaces.id })
-          .from(pgOpenDropSchema.namespaces)
-          .where(eq(pgOpenDropSchema.namespaces.name, candidate))
-          .limit(1)
-      )[0]
-    ) {
-      candidate = `${validSeed.slice(0, 34)}-${namespaceCollisionSuffix()}`;
-    }
-    return candidate;
+    return allocateNamespaceForEmail(email, async (candidate) =>
+      Boolean(
+        (
+          await this.orm
+            .select({ id: pgOpenDropSchema.namespaces.id })
+            .from(pgOpenDropSchema.namespaces)
+            .where(eq(pgOpenDropSchema.namespaces.name, candidate))
+            .limit(1)
+        )[0]
+      )
+    );
   }
 
 }

@@ -14,6 +14,7 @@ const title = target === "cli" ? `OpenDrop CLI v${version}` : `OpenDrop Server v
 const artifact = target === "cli" ? `npm package \`opendrop@${version}\`` : `server image \`${serverImage}:${version}\``;
 const install = target === "cli" ? `\`npx opendrop@${version}\`` : `\`docker pull ${serverImage}:${version}\``;
 const source = prNumber ? `#${prNumber} ${prTitle}` : prTitle;
+const sourceLabel = prNumber ? "PR" : "Source";
 
 console.log(`# ${title}`);
 console.log("");
@@ -25,7 +26,7 @@ console.log(install);
 console.log("");
 console.log("## Source");
 console.log("");
-console.log(`- PR: ${source}`);
+console.log(`- ${sourceLabel}: ${source}`);
 console.log(`- Labels: ${labels.length ? labels.map((label) => `\`${label}\``).join(", ") : "none"}`);
 
 if (prBody.trim()) {

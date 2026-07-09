@@ -21,6 +21,7 @@ Run MinIO and then start the Bun server plus Vite:
 
 ```bash
 docker compose up -d minio
+docker compose up createbuckets
 bun run dev
 ```
 
