@@ -13,6 +13,7 @@
     "dev": "bun scripts/dev.ts",
     "docs:dev": "bun run --cwd docs dev",
     "docs:build": "bun run --cwd docs build",
+    "readme:video": "remotion render remotion/index.ts ReadmeDemo docs/public/readme-demo.gif --codec=gif --every-nth-frame=2 --overwrite",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:auth-http": "vitest run tests/integration/auth-http.test.ts",
@@ -27,8 +28,10 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
+    "@remotion/cli": "4.0.487",
     "@types/node": "^24.0.0",
     "fflate": "^0.8.2",
+    "remotion": "4.0.487",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"

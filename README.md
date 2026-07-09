@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/web/public/opendrop-logo.svg" alt="OpenDrop logo" width="56">
+  <img src="./docs/public/readme-demo.gif" alt="OpenDrop demo: publish static previews and collect review comments" width="100%">
 </p>
 
 # OpenDrop
