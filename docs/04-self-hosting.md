@@ -1,7 +1,4 @@
----
-title: Self-hosting
-description: Run OpenDrop with Bun, SQLite, and S3-compatible storage.
----
+# Self-Hosting
 
 Self-hosted OpenDrop runs the Bun server, SQLite or PostgreSQL metadata storage, and S3-compatible object storage. The default local storage target is MinIO.
 

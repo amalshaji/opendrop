@@ -1,7 +1,4 @@
----
-title: Authentication
-description: OAuth, trusted headers, user creation, namespaces, and CLI tokens.
----
+# Authentication
 
 OpenDrop uses Better Auth for browser login and OpenDrop-issued tokens for CLI access.
 
@@ -20,6 +17,8 @@ Trusted header auth is for deployments behind a VPN, reverse proxy, or access ga
 The server trusts identity headers only when the request comes from configured proxy CIDRs or a runtime-controlled trusted source host. Admins must strip inbound identity headers before forwarding to OpenDrop and inject fresh trusted headers after authentication.
 
 Self-hosted deployments should use `TRUSTED_PROXY_CIDRS` for the reverse proxy source IP ranges. Cloudflare Workers deployments can use the built-in `cloudflare-workers` trusted host marker only after Cloudflare Access protects the Worker and `OPENDROP_TRUST_CLOUDFLARE_ACCESS=true` is set.
+
+For reverse proxy examples, see [Trusted header auth](09-trusted-headers.md).
 
 ## User Creation
 

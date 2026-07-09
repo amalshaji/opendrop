@@ -1,16 +1,13 @@
----
-title: Annotations
-description: Point comments and text highlights for static previews.
----
+# Annotations
 
-OpenDrop keeps review lightweight. Share URLs open a full-screen review room with floating tools and a comments panel, similar to modern design review workflows but attached to the live static preview.
+OpenDrop keeps review lightweight. Share URLs open a full-screen review room with floating tools and a comments panel.
 
 ## Supported Annotation Types
 
-- **Point comments** for a precise location on the page.
-- **Text highlights** for selected copy inside the preview.
-- **Nested replies** on any comment in a thread.
-- **Resolved state** so open feedback stays separate from shipped work.
+- Point comments for a precise location on the page.
+- Text highlights for selected copy inside the preview.
+- Nested replies on any comment in a thread.
+- Resolved state so open feedback stays separate from shipped work.
 
 ## Version Awareness
 
@@ -20,7 +17,7 @@ Annotations are stored against a deployment version and page path. A comment on 
 
 Point comments store normalized coordinates plus viewport context. Text highlights store normalized rects and the selected text so the preview can render the mark and keep it aligned as the page scrolls.
 
-## Agent Access
+## CLI Access
 
 The CLI can fetch page content with annotations:
 
@@ -30,3 +27,16 @@ opendrop annotations amal/homepage --path /
 ```
 
 This lets an agent reason over only the comments relevant to the current page, not the entire project.
+
+## Payload Shape
+
+```json
+{
+  "pagePath": "/",
+  "versionId": "ver_123",
+  "body": "The hero button wraps on mobile.",
+  "tags": ["mobile", "layout"],
+  "shape": { "type": "pin", "x": 0.52, "y": 0.34 },
+  "viewport": { "width": 390, "height": 844, "scrollX": 0, "scrollY": 0 }
+}
+```
