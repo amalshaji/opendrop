@@ -21,8 +21,10 @@
     "test:postgres": "vitest run tests/integration/postgres-repository.test.ts",
     "test:storage": "vitest run tests/integration/storage-contract.test.ts",
     "test:e2e": "bun scripts/e2e.ts",
+    "test:e2e:start": "bun scripts/e2e.ts start",
     "test:e2e:cli": "bun scripts/e2e.ts cli",
     "test:e2e:ui": "bun scripts/e2e.ts ui",
+    "test:e2e:down": "bun scripts/e2e.ts down",
     "test:skills": "vitest run tests/unit/skills.test.ts",
     "release:dry-run": "bun scripts/release/dry-run.ts"
   },
