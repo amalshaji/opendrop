@@ -77,8 +77,6 @@ jobs:
       - run: bun run test:e2e
         env:
           OPENDROP_E2E_BROWSER_MATRIX: full
-      - if: always()
-        run: docker compose -f docker-compose.e2e.yml down
       - run: bun run test:skills
       - run: bun run release:dry-run
 
