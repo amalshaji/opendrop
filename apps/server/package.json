@@ -13,6 +13,7 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "check": "tsc -p tsconfig.json --noEmit",
     "check:cloudflare": "tsc -p tsconfig.cloudflare.json --noEmit",
+    "build:cloudflare": "env WRANGLER_LOG_PATH=/tmp/opendrop-wrangler.log bunx wrangler deploy --dry-run --outdir /tmp/opendrop-wrangler-dry-run",
     "deploy:cloudflare": "bunx wrangler deploy",
     "start": "bun src/server.ts"
   },

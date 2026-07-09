@@ -3,7 +3,7 @@ import { artifactRoutePathSchema, deploymentRefSchema, pagePathToArtifactPath, v
 import type { OpenDropAuthConfig } from "@opendrop/shared/auth";
 import type { OpenDropRepository } from "@opendrop/shared/db/repository";
 import type { ArtifactStorage } from "@opendrop/shared/storage/interface";
-import { artifactBody, artifactResponseHeaders } from "@/artifact-http";
+import { artifactBody, artifactCacheControl, artifactResponseHeaders } from "@/artifact-http";
 import type { AppBindings, DeploymentPageRouteOptions, OpenDropContext } from "@/app-types";
 
 export function registerDeploymentPageRoutes(app: Hono<AppBindings>, { repo, storage, authConfig, renderShell }: DeploymentPageRouteOptions) {
@@ -91,10 +91,7 @@ async function serveDeploymentPageObject(
   const object = await storage.getObject(file.storageKey);
   if (!object) return c.notFound();
   return new Response(artifactBody(object.body), {
-    headers: artifactResponseHeaders(
-      object.contentType,
-      versionId ? "public, max-age=31536000, immutable" : "public, max-age=60"
-    )
+    headers: artifactResponseHeaders(object.contentType, artifactCacheControl(deployment.family.visibility, Boolean(versionId)))
   });
 }
 

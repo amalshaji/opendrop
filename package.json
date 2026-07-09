@@ -8,13 +8,14 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --cwd packages/shared build && bun run --cwd apps/server build && bun run --cwd apps/server check:cloudflare && bun run --cwd apps/web build && bun run --cwd apps/cli build",
-    "check": "bun run build",
+    "build": "bun run --cwd packages/shared build && bun run --cwd apps/server build && bun run --cwd apps/server check:cloudflare && bun run --cwd apps/web build && bun run --cwd apps/server build:cloudflare && bun run --cwd apps/cli build",
+    "check": "bun run --cwd packages/shared check && bun run --cwd apps/server check && bun run --cwd apps/server check:cloudflare && bun run --cwd apps/web check && bun run --cwd apps/cli check",
     "dev": "bun scripts/dev.ts",
     "readme:video": "remotion render remotion/index.ts ReadmeDemo docs/public/readme-demo.gif --codec=gif --every-nth-frame=2 --overwrite",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:auth-http": "vitest run tests/integration/auth-http.test.ts",
+    "test:http": "vitest run tests/integration/auth-http.test.ts tests/integration/annotations-http.test.ts tests/integration/upload-publish.test.ts",
     "test:repositories": "bun tests/integration/bun-repository-contract.ts && vitest run tests/integration/postgres-repository.test.ts",
     "test:postgres": "vitest run tests/integration/postgres-repository.test.ts",
     "test:storage": "vitest run tests/integration/storage-contract.test.ts",

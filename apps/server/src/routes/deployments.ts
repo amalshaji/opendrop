@@ -8,13 +8,14 @@ import {
   deploymentRefSchema,
   pagePathToArtifactPath,
   pageQuerySchema,
+  publishedDeploymentsResponseSchema,
   versionedDeploymentRefSchema,
   visibilityUpdateBodySchema
 } from "@opendrop/shared/core";
 import type { OpenDropRepository } from "@opendrop/shared/db/repository";
 import type { AnnotationRecord, UserRecord } from "@opendrop/shared/db/types";
 import type { ArtifactStorage } from "@opendrop/shared/storage/interface";
-import { artifactBody, artifactResponseHeaders, streamToText } from "@/artifact-http";
+import { artifactBody, artifactCacheControl, artifactResponseHeaders, streamToText } from "@/artifact-http";
 import { injectAnnotationBridge, rewritePreviewHtml } from "@/annotation-bridge";
 import type { AppBindings, OpenDropContext } from "@/app-types";
 import {
@@ -33,6 +34,31 @@ interface DeploymentRouteOptions {
 }
 
 export function registerDeploymentApiRoutes(app: Hono<AppBindings>, { repo, storage, authConfig }: DeploymentRouteOptions) {
+  app.get("/api/deployments", async (c) => {
+    const auth = requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const deployments = await repo.listDeploymentsForUser(auth.user.id);
+    return c.json(
+      publishedDeploymentsResponseSchema.parse({
+        deployments: deployments.map(({ family, version }) => ({
+          family: {
+            id: family.id,
+            namespaceName: family.namespaceName,
+            slug: family.slug,
+            visibility: family.visibility,
+            updatedAt: family.updatedAt
+          },
+          version: {
+            id: version.id,
+            versionNumber: version.versionNumber,
+            fileCount: version.fileCount,
+            totalBytes: version.totalBytes
+          }
+        }))
+      })
+    );
+  });
+
   app.get("/api/deployments/:namespace/:slug", async (c) => {
     const params = deploymentRefSchema.safeParse(c.req.param());
     if (!params.success) return validationError(c, params.error);
@@ -98,7 +124,17 @@ export function registerDeploymentApiRoutes(app: Hono<AppBindings>, { repo, stor
       repo,
       await repo.listAnnotations(deployment.family.namespaceName, deployment.family.slug, deployment.version.id, query.data.path)
     );
-    return c.json({ deployment, path: query.data.path, artifactPath, html, annotations });
+    return c.json({
+      deployment,
+      path: query.data.path,
+      artifactPath,
+      html,
+      annotations,
+      trust: {
+        html: "untrusted-uploaded-content",
+        annotations: "untrusted-user-content"
+      }
+    });
   });
 
   app.post("/api/deployments/:namespace/:slug/annotations", async (c) => {
@@ -180,11 +216,11 @@ export function registerDeploymentApiRoutes(app: Hono<AppBindings>, { repo, stor
       const html = await streamToText(object.body);
       const base = `/preview/${params.data.namespace}/${params.data.slug}/${params.data.versionId}/`;
       return new Response(injectAnnotationBridge(rewritePreviewHtml(html, base)), {
-        headers: artifactResponseHeaders(object.contentType, "public, max-age=60")
+        headers: artifactResponseHeaders(object.contentType, artifactCacheControl(deployment.family.visibility))
       });
     }
     return new Response(artifactBody(object.body), {
-      headers: artifactResponseHeaders(object.contentType, "public, max-age=60")
+      headers: artifactResponseHeaders(object.contentType, artifactCacheControl(deployment.family.visibility))
     });
   });
 }

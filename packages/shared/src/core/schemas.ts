@@ -54,6 +54,28 @@ export const versionedDeploymentRefSchema = deploymentRefSchema.extend({
   versionId: versionIdSchema
 });
 
+export const publishedDeploymentSchema = z.object({
+  family: z.object({
+    id: z.string().min(1),
+    namespaceName: namespaceParamSchema,
+    slug: slugParamSchema,
+    visibility: visibilitySchema,
+    updatedAt: z.string().min(1)
+  }),
+  version: z.object({
+    id: versionIdSchema,
+    versionNumber: z.number().int().positive(),
+    fileCount: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative()
+  })
+});
+
+export const publishedDeploymentsResponseSchema = z.object({
+  deployments: z.array(publishedDeploymentSchema)
+});
+
+export type PublishedDeployment = z.infer<typeof publishedDeploymentSchema>;
+
 export const uploadMetadataSchema = z.object({
   namespace: optionalNormalizedNamespaceInputSchema,
   slug: optionalNormalizedSlugInputSchema,

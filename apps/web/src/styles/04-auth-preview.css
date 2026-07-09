@@ -1,3 +1,6 @@
+.authTerminal {
+  width: 100%;
+}
 
 .authTerminalBar {
   display: flex;
@@ -49,6 +52,10 @@
 
 .termComment {
   color: #5c766a;
+}
+
+.termCommentLine {
+  padding-left: 22px;
 }
 
 .authCard [data-slot="card-header"] {

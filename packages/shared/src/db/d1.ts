@@ -29,18 +29,24 @@ import {
   namespaceAccessRecords,
   namespaceMemberRecord
 } from "./domain";
+import { decideDeviceTokenExchange } from "./device-authorization";
 import { sqliteOpenDropSchema } from "./schema";
+
+export interface D1ResultLike {
+  meta?: { changes?: number };
+}
 
 export interface D1PreparedStatementLike {
   bind(...values: unknown[]): D1PreparedStatementLike;
   first<T = unknown>(): Promise<T | null>;
   all<T = unknown>(): Promise<{ results?: T[] }>;
   raw<T = unknown[]>(): Promise<T[]>;
-  run(): Promise<unknown>;
+  run(): Promise<D1ResultLike>;
 }
 
 export interface D1DatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
+  batch(statements: D1PreparedStatementLike[]): Promise<D1ResultLike[]>;
   exec?(query: string): Promise<unknown>;
 }
 
@@ -84,24 +90,12 @@ export class D1OpenDropRepository implements OpenDropRepository {
     }
     if (byEmail) {
       const now = nowIso();
-      await this.orm.insert(sqliteOpenDropSchema.identities).values({
-        id: randomId("idn_"),
-        userId: byEmail.id,
-        provider: identity.provider,
-        providerSubject: identity.subject,
-        email: identity.email,
-        createdAt: now,
-        updatedAt: now
-      });
-      await this.orm
-        .update(sqliteOpenDropSchema.users)
-        .set({
-          email: identity.email,
-          name: identity.name ?? byEmail.name,
-          avatarUrl: identity.avatarUrl ?? byEmail.avatarUrl,
-          updatedAt: now
-        })
-        .where(eq(sqliteOpenDropSchema.users.id, byEmail.id));
+      await this.db.batch([
+        this.db.prepare("insert into identities (id, user_id, provider, provider_subject, email, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)")
+          .bind(randomId("idn_"), byEmail.id, identity.provider, identity.subject, identity.email, now, now),
+        this.db.prepare("update users set email = ?, name = ?, avatar_url = ?, updated_at = ? where id = ?")
+          .bind(identity.email, identity.name ?? byEmail.name, identity.avatarUrl ?? byEmail.avatarUrl, now, byEmail.id)
+      ]);
       const user = await this.getUserById(byEmail.id);
       if (!user) throw new Error("User not found.");
       return user;
@@ -110,25 +104,14 @@ export class D1OpenDropRepository implements OpenDropRepository {
     const now = nowIso();
     const userId = randomId("usr_");
     const namespace = await this.allocateNamespace(identity.email);
-    await this.orm.insert(sqliteOpenDropSchema.users).values({
-      id: userId,
-      email: identity.email,
-      name: identity.name ?? null,
-      avatarUrl: identity.avatarUrl ?? null,
-      defaultNamespace: namespace,
-      createdAt: now,
-      updatedAt: now
-    });
-    await this.orm.insert(sqliteOpenDropSchema.identities).values({
-      id: randomId("idn_"),
-      userId,
-      provider: identity.provider,
-      providerSubject: identity.subject,
-      email: identity.email,
-      createdAt: now,
-      updatedAt: now
-    });
-    await this.orm.insert(sqliteOpenDropSchema.namespaces).values({ id: randomId("nsp_"), name: namespace, ownerUserId: userId, createdAt: now });
+    await this.db.batch([
+      this.db.prepare("insert into users (id, email, name, avatar_url, default_namespace, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)")
+        .bind(userId, identity.email, identity.name ?? null, identity.avatarUrl ?? null, namespace, now, now),
+      this.db.prepare("insert into identities (id, user_id, provider, provider_subject, email, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)")
+        .bind(randomId("idn_"), userId, identity.provider, identity.subject, identity.email, now, now),
+      this.db.prepare("insert into namespaces (id, name, owner_user_id, created_at) values (?, ?, ?, ?)")
+        .bind(randomId("nsp_"), namespace, userId, now)
+    ]);
     const user = await this.getUserById(userId);
     if (!user) throw new Error("User not found.");
     return user;
@@ -157,19 +140,12 @@ export class D1OpenDropRepository implements OpenDropRepository {
 
     const user = await this.orm.select().from(sqliteOpenDropSchema.users).where(eq(sqliteOpenDropSchema.users.email, identity.email)).get();
     if (!user) return null;
-    await this.orm.insert(sqliteOpenDropSchema.identities).values({
-      id: randomId("idn_"),
-      userId: user.id,
-      provider: identity.provider,
-      providerSubject: identity.subject,
-      email: identity.email,
-      createdAt: now,
-      updatedAt: now
-    });
-    await this.orm
-      .update(sqliteOpenDropSchema.users)
-      .set({ name: identity.name ?? user.name, avatarUrl: identity.avatarUrl ?? user.avatarUrl, updatedAt: now })
-      .where(eq(sqliteOpenDropSchema.users.id, user.id));
+    await this.db.batch([
+      this.db.prepare("insert into identities (id, user_id, provider, provider_subject, email, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)")
+        .bind(randomId("idn_"), user.id, identity.provider, identity.subject, identity.email, now, now),
+      this.db.prepare("update users set name = ?, avatar_url = ?, updated_at = ? where id = ?")
+        .bind(identity.name ?? user.name, identity.avatarUrl ?? user.avatarUrl, now, user.id)
+    ]);
     return this.getUserById(user.id);
   }
 
@@ -275,7 +251,7 @@ export class D1OpenDropRepository implements OpenDropRepository {
     );
   }
 
-  async approveDeviceAuthorization(userCode: string, userId: string, tokenHash: string, tokenPlain: string): Promise<void> {
+  async approveDeviceAuthorization(userCode: string, userId: string): Promise<void> {
     const row = await this.orm
       .select()
       .from(sqliteOpenDropSchema.deviceAuthorizations)
@@ -284,21 +260,12 @@ export class D1OpenDropRepository implements OpenDropRepository {
     if (!row) throw new Error("Device code not found.");
     if (row.status !== "pending") throw new Error("Device code is not pending.");
     if (new Date(row.expiresAt).getTime() < Date.now()) throw new Error("Device code expired.");
-    const tokenId = randomId("tok_");
     const now = nowIso();
-    await this.orm.insert(sqliteOpenDropSchema.cliTokens).values({
-      id: tokenId,
-      userId,
-      tokenHash,
-      label: row.label,
-      deviceName: row.deviceName,
-      userAgent: row.userAgent,
-      createdAt: now
-    });
-    await this.orm
-      .update(sqliteOpenDropSchema.deviceAuthorizations)
-      .set({ status: "approved", userId, tokenHash, tokenPlain, approvedAt: now })
-      .where(eq(sqliteOpenDropSchema.deviceAuthorizations.id, row.id));
+    const result = await this.db
+      .prepare("update device_authorizations set status = 'approved', user_id = ?, approved_at = ? where id = ? and status = 'pending' and expires_at >= ?")
+      .bind(userId, now, row.id, now)
+      .run();
+    if (result.meta?.changes !== 1) throw new Error("Device code is no longer pending.");
   }
 
   async rejectDeviceAuthorization(userCode: string, userId: string): Promise<void> {
@@ -308,31 +275,35 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.deviceAuthorizations.userCode, userCode), eq(sqliteOpenDropSchema.deviceAuthorizations.status, "pending")));
   }
 
-  async exchangeDeviceAuthorization(deviceCodeHash: string) {
+  async exchangeDeviceAuthorization(deviceCodeHash: string, tokenHash: string) {
     const row = await this.orm
       .select({
         id: sqliteOpenDropSchema.deviceAuthorizations.id,
         status: sqliteOpenDropSchema.deviceAuthorizations.status,
         userId: sqliteOpenDropSchema.deviceAuthorizations.userId,
-        tokenPlain: sqliteOpenDropSchema.deviceAuthorizations.tokenPlain,
+        label: sqliteOpenDropSchema.deviceAuthorizations.label,
+        deviceName: sqliteOpenDropSchema.deviceAuthorizations.deviceName,
+        userAgent: sqliteOpenDropSchema.deviceAuthorizations.userAgent,
         expiresAt: sqliteOpenDropSchema.deviceAuthorizations.expiresAt
       })
       .from(sqliteOpenDropSchema.deviceAuthorizations)
       .where(eq(sqliteOpenDropSchema.deviceAuthorizations.deviceCodeHash, deviceCodeHash))
       .get();
     if (!row) return null;
-    if (row.status === "approved" && row.tokenPlain) {
-      await this.orm
-        .update(sqliteOpenDropSchema.deviceAuthorizations)
-        .set({ tokenPlain: null })
-        .where(eq(sqliteOpenDropSchema.deviceAuthorizations.id, row.id));
+    const decision = decideDeviceTokenExchange(row);
+    if (decision.kind === "blocked") return decision.result;
+    const authorization = decision.authorization;
+    const now = nowIso();
+    const [updateResult] = await this.db.batch([
+      this.db.prepare("update device_authorizations set status = 'exchanged', token_hash = ? where id = ? and status = 'approved' and expires_at >= ?")
+        .bind(tokenHash, authorization.id, now),
+      this.db.prepare("insert into cli_tokens (id, user_id, token_hash, label, device_name, user_agent, created_at) select ?, user_id, ?, label, device_name, user_agent, ? from device_authorizations where id = ? and status = 'exchanged' and token_hash = ?")
+        .bind(randomId("tok_"), tokenHash, now, authorization.id, tokenHash)
+    ]);
+    if (updateResult?.meta?.changes !== 1) {
+      return { status: "already_exchanged" as const, expiresAt: authorization.expiresAt };
     }
-    return {
-      status: row.status,
-      userId: row.userId,
-      tokenPlain: row.tokenPlain,
-      expiresAt: row.expiresAt
-    };
+    return { status: "issued" as const, expiresAt: authorization.expiresAt };
   }
 
   async getNamespace(name: string): Promise<NamespaceRecord | null> {
@@ -484,6 +455,25 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.deploymentFamilies.namespaceName, namespace), eq(sqliteOpenDropSchema.deploymentFamilies.slug, slug)))
       .get();
     return row ? mapDeploymentFamily(row) : null;
+  }
+
+  async listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]> {
+    const rows = await this.orm
+      .select({
+        family: sqliteOpenDropSchema.deploymentFamilies,
+        version: sqliteOpenDropSchema.deploymentVersions
+      })
+      .from(sqliteOpenDropSchema.deploymentFamilies)
+      .innerJoin(
+        sqliteOpenDropSchema.deploymentVersions,
+        eq(sqliteOpenDropSchema.deploymentFamilies.latestVersionId, sqliteOpenDropSchema.deploymentVersions.id)
+      )
+      .where(eq(sqliteOpenDropSchema.deploymentFamilies.ownerUserId, userId))
+      .orderBy(desc(sqliteOpenDropSchema.deploymentFamilies.updatedAt));
+    return rows.map((row) => ({
+      family: mapDeploymentFamily(row.family),
+      version: mapDeploymentVersion(row.version)
+    }));
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {

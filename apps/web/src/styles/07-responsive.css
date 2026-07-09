@@ -186,3 +186,204 @@
     padding: 12px;
   }
 }
+
+@media (max-width: 760px) {
+  .appShell {
+    display: block;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  .appSidebar {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sidebar-border);
+    padding: 10px 16px;
+  }
+
+  .sidebarHeader {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: max-content;
+    padding: 0 !important;
+  }
+
+  .brand {
+    min-height: 32px;
+    padding: 0;
+    font-size: 16px;
+  }
+
+  .brandMark {
+    width: 24px;
+    height: 24px;
+  }
+
+  .appSidebar [data-slot="sidebar-content"] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .appSidebar [data-slot="sidebar-content"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .appSidebar [data-slot="sidebar-group"] {
+    width: max-content;
+    display: block;
+  }
+
+  .appSidebar [data-slot="sidebar-group-label"] {
+    display: none;
+  }
+
+  .appSidebar [data-slot="sidebar-group-content"],
+  .appSidebar [data-slot="sidebar-menu"] {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  .appSidebar [data-slot="sidebar-menu-button"] {
+    min-height: 32px;
+    width: max-content;
+    padding-inline: 9px;
+    white-space: nowrap;
+  }
+
+  .sidebarFooter {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    display: block;
+    margin: 0;
+    border: 0;
+    padding: 0 !important;
+  }
+
+  .sidebarAccount {
+    display: none;
+  }
+
+  .logoutButton {
+    width: auto;
+    min-height: 32px;
+    height: 32px;
+  }
+
+  .workspace {
+    width: 100%;
+    padding: 18px 16px 32px;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .topbar h1 {
+    font-size: clamp(24px, 7.2vw, 30px);
+  }
+
+  .topbar p {
+    max-width: 34rem;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  .topbarActions,
+  .statusBadge {
+    width: auto;
+    max-width: none;
+  }
+
+  .topbarActions {
+    justify-content: flex-end;
+  }
+
+  .statusBadge {
+    justify-content: center;
+  }
+
+  .uploadPanelHeader {
+    padding: 14px 12px !important;
+  }
+
+  .uploadPanelTitle > span {
+    margin-bottom: 5px;
+  }
+
+  .uploadSteps {
+    font-size: 11.5px;
+  }
+
+  .uploadSteps span {
+    min-height: 28px;
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .uploadComposer,
+  .publishDock {
+    padding: 12px;
+  }
+
+  .uploadDropzone {
+    min-height: 210px;
+    padding: 16px;
+  }
+
+  .uploadInspector .inspectorBlock:first-child {
+    border-bottom-color: #175c48;
+  }
+
+  .authPage {
+    min-height: 100dvh;
+    gap: 28px;
+    padding: 32px 20px 40px;
+    overflow-x: hidden;
+  }
+
+  .authHero {
+    gap: 16px;
+  }
+
+  .authCopy h1 {
+    font-size: clamp(34px, 11vw, 46px);
+  }
+
+  .authTerminalBody {
+    padding-inline: 12px;
+    font-size: 11.5px;
+    white-space: normal;
+  }
+
+  .authTerminalBody .termLine {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .termCommentLine {
+    padding-left: 18px;
+  }
+}

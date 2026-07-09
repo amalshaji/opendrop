@@ -8,7 +8,7 @@ Cloudflare V1 is designed around Workers, D1, and R2. The server app includes a 
 - Object storage: R2
 - HTTP server: Cloudflare Workers runtime
 - Web shell: Workers Static Assets from `apps/web/dist`
-- Auth: Better Auth plus OAuth or trusted headers
+- Auth: Better Auth for OAuth, or trusted headers without Better Auth
 
 ## Configure Wrangler
 
@@ -18,6 +18,7 @@ Edit `apps/server/wrangler.toml`:
 name = "opendrop"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-07-08"
+compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
@@ -41,13 +42,21 @@ run_worker_first = true
 1. Create an R2 bucket and D1 database.
 2. Build the web shell with `bun run --cwd apps/web build`.
 3. Update `apps/server/wrangler.toml` with the D1 database id, R2 bucket name, and `[assets]` binding.
-4. Configure OAuth secrets or Cloudflare Access/trusted headers.
+4. Configure OAuth secrets or Cloudflare Access/trusted headers. OAuth mode requires `BETTER_AUTH_SECRET` with at least 32 characters; trusted-header mode does not.
 5. Apply D1 migrations from `packages/shared/migrations`.
 6. Deploy with `bun run --cwd apps/server deploy:cloudflare`.
 
 ```bash
 bun run --cwd apps/web build
 bun run --cwd apps/server deploy:cloudflare
+```
+
+For OAuth, store credentials as Worker secrets rather than `[vars]` values:
+
+```bash
+cd apps/server
+bunx wrangler secret put BETTER_AUTH_SECRET
+bunx wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
 `run_worker_first = true` lets the Worker enforce API, preview, and private-share access before falling back to the static React shell.

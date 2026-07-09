@@ -194,7 +194,7 @@ select {
 }
 
 .workspace {
-  max-width: 1540px;
+  max-width: none;
   padding: 28px 32px 40px;
   gap: 18px;
 }
@@ -274,6 +274,8 @@ select {
   min-height: 38px;
   align-items: center;
   gap: 8px;
+  border-top: 2px solid var(--border);
+  padding-top: 7px;
 }
 
 .uploadSteps span::after {
@@ -282,6 +284,7 @@ select {
 
 .uploadSteps .isActive,
 .uploadSteps .isComplete {
+  border-top-color: #087456;
   color: var(--foreground);
   font-weight: 650;
 }
@@ -376,6 +379,22 @@ select {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fbfbf7;
+}
+
+.uploadInspector .inspectorBlock:first-child {
+  border-color: #175c48;
+  background: #043f2e;
+  color: #ffffff;
+}
+
+.uploadInspector .inspectorBlock:first-child .inspectorLabel {
+  color: #b8dfd2;
+}
+
+.uploadInspector .inspectorBlock:first-child .monoValue {
+  border-color: rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 8%);
+  color: #ffffff;
 }
 
 .inspectorBlock {

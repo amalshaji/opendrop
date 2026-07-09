@@ -8,6 +8,8 @@ export interface Env {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
   ASSETS: Fetcher;
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
   OPENDROP_AUTH_MODE?: string;
   OPENDROP_ALLOWED_EMAIL_DOMAINS?: string;
   OPENDROP_DEFAULT_VISIBILITY?: string;
@@ -29,11 +31,13 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const authEnvironment = env as unknown as Record<string, string | undefined>;
+    const authConfig = loadAuthConfig(authEnvironment);
     const services = {
       repo: createD1Repository(env.DB as any),
       storage: new R2ArtifactStorage(env.ARTIFACTS as any),
-      browserAuth: createBrowserAuth(env as unknown as Record<string, string | undefined>, env.DB),
-      authConfig: loadAuthConfig(env as unknown as Record<string, string | undefined>)
+      browserAuth: authConfig.authMode === "oauth" ? createBrowserAuth(authEnvironment, env.DB) : undefined,
+      authConfig
     };
     const trustedSourceHost = env.OPENDROP_TRUST_CLOUDFLARE_ACCESS === "true" ? "cloudflare-workers" : undefined;
     const app = createOpenDropApp({ ...services, trustedSourceHost });

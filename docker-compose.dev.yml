@@ -7,7 +7,6 @@ services:
       NODE_ENV: development
       PORT: 3000
       BETTER_AUTH_URL: http://localhost:3000
-      BETTER_AUTH_SECRET: opendrop-dev-secret-change-before-production
       OPENDROP_AUTH_MODE: dev
       OPENDROP_DB_DRIVER: sqlite
       SQLITE_PATH: /data/opendrop.sqlite
@@ -31,8 +30,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: opendrop
       MINIO_ROOT_PASSWORD: opendrop-secret

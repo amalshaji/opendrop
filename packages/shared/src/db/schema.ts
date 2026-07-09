@@ -1,4 +1,4 @@
-import { index as pgIndex, integer as pgInteger, pgTable, primaryKey as pgPrimaryKey, text as pgText, uniqueIndex as pgUniqueIndex } from "drizzle-orm/pg-core";
+import { boolean as pgBoolean, index as pgIndex, integer as pgInteger, pgTable, primaryKey as pgPrimaryKey, text as pgText, timestamp as pgTimestamp, uniqueIndex as pgUniqueIndex } from "drizzle-orm/pg-core";
 import { index as sqliteIndex, integer as sqliteInteger, primaryKey as sqlitePrimaryKey, sqliteTable, text as sqliteText, uniqueIndex as sqliteUniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const sqliteBetterAuthUsers = sqliteTable("user", {
@@ -102,7 +102,10 @@ export const sqliteDeploymentFamilies = sqliteTable(
     createdAt: sqliteText("created_at").notNull(),
     updatedAt: sqliteText("updated_at").notNull()
   },
-  (table) => [sqliteUniqueIndex("idx_deployment_families_namespace_slug").on(table.namespaceName, table.slug)]
+  (table) => [
+    sqliteUniqueIndex("idx_deployment_families_namespace_slug").on(table.namespaceName, table.slug),
+    sqliteIndex("idx_deployment_families_owner_updated").on(table.ownerUserId, table.updatedAt)
+  ]
 );
 
 export const sqliteDeploymentVersions = sqliteTable(
@@ -183,7 +186,6 @@ export const sqliteDeviceAuthorizations = sqliteTable("device_authorizations", {
   status: sqliteText("status").notNull(),
   userId: sqliteText("user_id").references(() => sqliteUsers.id),
   tokenHash: sqliteText("token_hash"),
-  tokenPlain: sqliteText("token_plain"),
   label: sqliteText("label"),
   deviceName: sqliteText("device_name"),
   userAgent: sqliteText("user_agent"),
@@ -214,18 +216,18 @@ export const pgBetterAuthUsers = pgTable("user", {
   id: pgText("id").primaryKey(),
   name: pgText("name").notNull(),
   email: pgText("email").notNull().unique(),
-  emailVerified: pgInteger("emailVerified").notNull().default(0),
+  emailVerified: pgBoolean("emailVerified").notNull().default(false),
   image: pgText("image"),
-  createdAt: pgInteger("createdAt").notNull(),
-  updatedAt: pgInteger("updatedAt").notNull()
+  createdAt: pgTimestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  updatedAt: pgTimestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull()
 });
 
 export const pgBetterAuthSessions = pgTable("session", {
   id: pgText("id").primaryKey(),
-  expiresAt: pgInteger("expiresAt").notNull(),
+  expiresAt: pgTimestamp("expiresAt", { withTimezone: true, mode: "date" }).notNull(),
   token: pgText("token").notNull().unique(),
-  createdAt: pgInteger("createdAt").notNull(),
-  updatedAt: pgInteger("updatedAt").notNull(),
+  createdAt: pgTimestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  updatedAt: pgTimestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
   ipAddress: pgText("ipAddress"),
   userAgent: pgText("userAgent"),
   userId: pgText("userId").notNull().references(() => pgBetterAuthUsers.id)
@@ -239,21 +241,21 @@ export const pgBetterAuthAccounts = pgTable("account", {
   accessToken: pgText("accessToken"),
   refreshToken: pgText("refreshToken"),
   idToken: pgText("idToken"),
-  accessTokenExpiresAt: pgInteger("accessTokenExpiresAt"),
-  refreshTokenExpiresAt: pgInteger("refreshTokenExpiresAt"),
+  accessTokenExpiresAt: pgTimestamp("accessTokenExpiresAt", { withTimezone: true, mode: "date" }),
+  refreshTokenExpiresAt: pgTimestamp("refreshTokenExpiresAt", { withTimezone: true, mode: "date" }),
   scope: pgText("scope"),
   password: pgText("password"),
-  createdAt: pgInteger("createdAt").notNull(),
-  updatedAt: pgInteger("updatedAt").notNull()
+  createdAt: pgTimestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  updatedAt: pgTimestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull()
 });
 
 export const pgBetterAuthVerifications = pgTable("verification", {
   id: pgText("id").primaryKey(),
   identifier: pgText("identifier").notNull(),
   value: pgText("value").notNull(),
-  expiresAt: pgInteger("expiresAt").notNull(),
-  createdAt: pgInteger("createdAt"),
-  updatedAt: pgInteger("updatedAt")
+  expiresAt: pgTimestamp("expiresAt", { withTimezone: true, mode: "date" }).notNull(),
+  createdAt: pgTimestamp("createdAt", { withTimezone: true, mode: "date" }),
+  updatedAt: pgTimestamp("updatedAt", { withTimezone: true, mode: "date" })
 });
 
 export const pgUsers = pgTable("users", {
@@ -311,7 +313,10 @@ export const pgDeploymentFamilies = pgTable(
     createdAt: pgText("created_at").notNull(),
     updatedAt: pgText("updated_at").notNull()
   },
-  (table) => [pgUniqueIndex("idx_deployment_families_namespace_slug").on(table.namespaceName, table.slug)]
+  (table) => [
+    pgUniqueIndex("idx_deployment_families_namespace_slug").on(table.namespaceName, table.slug),
+    pgIndex("idx_deployment_families_owner_updated").on(table.ownerUserId, table.updatedAt)
+  ]
 );
 
 export const pgDeploymentVersions = pgTable(
@@ -392,7 +397,6 @@ export const pgDeviceAuthorizations = pgTable("device_authorizations", {
   status: pgText("status").notNull(),
   userId: pgText("user_id").references(() => pgUsers.id),
   tokenHash: pgText("token_hash"),
-  tokenPlain: pgText("token_plain"),
   label: pgText("label"),
   deviceName: pgText("device_name"),
   userAgent: pgText("user_agent"),

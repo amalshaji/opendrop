@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
@@ -33,6 +32,8 @@ import {
   namespaceAccessRecords,
   namespaceMemberRecord
 } from "./domain";
+import { decideDeviceTokenExchange } from "./device-authorization";
+import { runPostgresMigrations } from "./migrations";
 import { pgOpenDropSchema } from "./schema";
 
 const migrationsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../migrations");
@@ -47,10 +48,10 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
   }
 
   async migrate(): Promise<void> {
-    const sql = readFileSync(resolve(migrationsDir, "0001_initial.sql"), "utf8");
-    await this.pool.query(sql);
-    await this.pool.query("alter table annotations add column if not exists parent_annotation_id text references annotations(id)");
-    await this.pool.query("create index if not exists idx_annotations_parent on annotations(parent_annotation_id)");
+    await runPostgresMigrations(this.pool, [
+      { directory: migrationsDir },
+      { directory: resolve(migrationsDir, "postgres"), prefix: "postgres/" }
+    ]);
   }
 
   async getOrCreateUser(identity: IdentityInput): Promise<UserRecord> {
@@ -281,26 +282,16 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     return row ?? null;
   }
 
-  async approveDeviceAuthorization(userCode: string, userId: string, tokenHash: string, tokenPlain: string): Promise<void> {
+  async approveDeviceAuthorization(userCode: string, userId: string): Promise<void> {
     await this.orm.transaction(async (tx) => {
-      const [row] = await tx.select().from(pgOpenDropSchema.deviceAuthorizations).where(eq(pgOpenDropSchema.deviceAuthorizations.userCode, userCode)).limit(1);
+      const [row] = await tx.select().from(pgOpenDropSchema.deviceAuthorizations).where(eq(pgOpenDropSchema.deviceAuthorizations.userCode, userCode)).limit(1).for("update");
       if (!row) throw new Error("Device code not found.");
       if (row.status !== "pending") throw new Error("Device code is not pending.");
       if (new Date(row.expiresAt).getTime() < Date.now()) throw new Error("Device code expired.");
-      const tokenId = randomId("tok_");
       const now = nowIso();
-      await tx.insert(pgOpenDropSchema.cliTokens).values({
-        id: tokenId,
-        userId,
-        tokenHash,
-        label: row.label,
-        deviceName: row.deviceName,
-        userAgent: row.userAgent,
-        createdAt: now
-      });
       await tx
         .update(pgOpenDropSchema.deviceAuthorizations)
-        .set({ status: "approved", userId, tokenHash, tokenPlain, approvedAt: now })
+        .set({ status: "approved", userId, approvedAt: now })
         .where(eq(pgOpenDropSchema.deviceAuthorizations.id, row.id));
     });
   }
@@ -312,29 +303,29 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.deviceAuthorizations.userCode, userCode), eq(pgOpenDropSchema.deviceAuthorizations.status, "pending")));
   }
 
-  async exchangeDeviceAuthorization(deviceCodeHash: string) {
+  async exchangeDeviceAuthorization(deviceCodeHash: string, tokenHash: string) {
     return this.orm.transaction(async (tx) => {
       const [row] = await tx
-        .select({
-          id: pgOpenDropSchema.deviceAuthorizations.id,
-          status: pgOpenDropSchema.deviceAuthorizations.status,
-          userId: pgOpenDropSchema.deviceAuthorizations.userId,
-          tokenPlain: pgOpenDropSchema.deviceAuthorizations.tokenPlain,
-          expiresAt: pgOpenDropSchema.deviceAuthorizations.expiresAt
-        })
+        .select()
         .from(pgOpenDropSchema.deviceAuthorizations)
         .where(eq(pgOpenDropSchema.deviceAuthorizations.deviceCodeHash, deviceCodeHash))
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!row) return null;
-      if (row.status === "approved" && row.tokenPlain) {
-        await tx.update(pgOpenDropSchema.deviceAuthorizations).set({ tokenPlain: null }).where(eq(pgOpenDropSchema.deviceAuthorizations.id, row.id));
-      }
-      return {
-        status: row.status,
-        userId: row.userId,
-        tokenPlain: row.tokenPlain,
-        expiresAt: row.expiresAt
-      };
+      const decision = decideDeviceTokenExchange(row);
+      if (decision.kind === "blocked") return decision.result;
+      const authorization = decision.authorization;
+      await tx.update(pgOpenDropSchema.deviceAuthorizations).set({ status: "exchanged", tokenHash }).where(eq(pgOpenDropSchema.deviceAuthorizations.id, authorization.id));
+      await tx.insert(pgOpenDropSchema.cliTokens).values({
+        id: randomId("tok_"),
+        userId: authorization.userId,
+        tokenHash,
+        label: authorization.label,
+        deviceName: authorization.deviceName,
+        userAgent: authorization.userAgent,
+        createdAt: nowIso()
+      });
+      return { status: "issued" as const, expiresAt: authorization.expiresAt };
     });
   }
 
@@ -486,6 +477,25 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.deploymentFamilies.namespaceName, namespace), eq(pgOpenDropSchema.deploymentFamilies.slug, slug)))
       .limit(1);
     return row ? mapDeploymentFamily(row) : null;
+  }
+
+  async listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]> {
+    const rows = await this.orm
+      .select({
+        family: pgOpenDropSchema.deploymentFamilies,
+        version: pgOpenDropSchema.deploymentVersions
+      })
+      .from(pgOpenDropSchema.deploymentFamilies)
+      .innerJoin(
+        pgOpenDropSchema.deploymentVersions,
+        eq(pgOpenDropSchema.deploymentFamilies.latestVersionId, pgOpenDropSchema.deploymentVersions.id)
+      )
+      .where(eq(pgOpenDropSchema.deploymentFamilies.ownerUserId, userId))
+      .orderBy(desc(pgOpenDropSchema.deploymentFamilies.updatedAt));
+    return rows.map((row) => ({
+      family: mapDeploymentFamily(row.family),
+      version: mapDeploymentVersion(row.version)
+    }));
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {

@@ -21,7 +21,7 @@ export interface AppBindings {
 export interface CreateAppOptions {
   repo: OpenDropRepository;
   storage: ArtifactStorage;
-  browserAuth: BrowserAuth;
+  browserAuth?: BrowserAuth;
   authConfig: OpenDropAuthConfig;
   trustedSourceHost?: string;
   trustedSourceIp?: string | null;

@@ -1,6 +1,7 @@
 name = "opendrop"
 main = "src/cloudflare.ts"
 compatibility_date = "2026-07-08"
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "../web/dist"

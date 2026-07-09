@@ -1,10 +1,12 @@
 # Authentication
 
-OpenDrop uses Better Auth for browser login and OpenDrop-issued tokens for CLI access.
+OpenDrop uses Better Auth only for OAuth browser login. Trusted-header and dev deployments do not initialize Better Auth. CLI access uses OpenDrop-issued tokens in every mode.
 
 ## OAuth
 
 Configure Google or GitHub provider credentials on the server. OAuth identities are provisioned after the provider returns a verified email and the optional allowed-domain checks pass.
+
+OAuth mode requires an explicit `BETTER_AUTH_SECRET` containing at least 32 characters. OpenDrop has no fallback secret and does not enable password authentication.
 
 When `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are configured, the web shell exposes matching Better Auth sign-in buttons automatically.
 

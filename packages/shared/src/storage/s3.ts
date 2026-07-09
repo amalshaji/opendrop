@@ -34,7 +34,7 @@ export class S3ArtifactStorage implements ArtifactStorage {
         Key: key,
         Body: body,
         ContentType: contentType,
-        CacheControl: "public, max-age=31536000, immutable"
+        CacheControl: "private, no-store"
       })
     );
   }

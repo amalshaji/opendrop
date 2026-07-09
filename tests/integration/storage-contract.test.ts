@@ -21,7 +21,9 @@ describeS3("s3-compatible storage contract", () => {
 
 describe("r2 storage contract", () => {
   it("stores, reads, and deletes artifact objects with an R2 bucket binding", async () => {
-    await expectArtifactStorageContract(new R2ArtifactStorage(new MemoryR2Bucket()));
+    const bucket = new MemoryR2Bucket();
+    await expectArtifactStorageContract(new R2ArtifactStorage(bucket));
+    expect(bucket.cacheControls).toEqual(["private, no-store", "private, no-store"]);
   });
 });
 
@@ -50,9 +52,11 @@ async function objectText(body: ReadableStream<Uint8Array> | Uint8Array | undefi
 
 class MemoryR2Bucket implements R2BucketLike {
   private objects = new Map<string, { body: Uint8Array; contentType?: string }>();
+  readonly cacheControls: Array<string | undefined> = [];
 
-  async put(key: string, body: Uint8Array, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown> {
+  async put(key: string, body: Uint8Array, options?: { httpMetadata?: { contentType?: string; cacheControl?: string } }): Promise<unknown> {
     this.objects.set(key, { body, contentType: options?.httpMetadata?.contentType });
+    this.cacheControls.push(options?.httpMetadata?.cacheControl);
     return undefined;
   }
 

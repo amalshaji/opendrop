@@ -28,6 +28,13 @@ describe("drizzle schema", () => {
     expect(tableNames(sqliteOpenDropSchema)).toEqual(expectedTables);
     expect(tableNames(pgOpenDropSchema)).toEqual(expectedTables);
   });
+
+  it("includes PostgreSQL conversions for Better Auth booleans and dates", () => {
+    const migration = readFileSync("packages/shared/migrations/postgres/0001_better_auth_native_types.sql", "utf8");
+    expect(migration).toContain("type boolean");
+    expect(migration).toContain("type timestamptz");
+    expect(migration).toContain("to_timestamp");
+  });
 });
 
 function tableNames(schema: Record<string, { [key: symbol]: unknown }>): string[] {

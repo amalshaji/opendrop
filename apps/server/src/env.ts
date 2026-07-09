@@ -10,7 +10,7 @@ import { S3ArtifactStorage, type ArtifactStorage } from "@opendrop/shared/storag
 export interface RuntimeServices {
   repo: OpenDropRepository;
   storage: ArtifactStorage;
-  browserAuth: BrowserAuth;
+  browserAuth?: BrowserAuth;
   authConfig: ReturnType<typeof loadAuthConfig>;
 }
 
@@ -40,7 +40,10 @@ export async function createRuntimeServices(env: Record<string, string | undefin
         ? createPostgresRepository(requiredDatabaseUrl(databaseUrl))
         : unsupportedDatabaseDriver(dbDriver);
   await repo.migrate();
-  const browserAuth = createBrowserAuth(env, createBrowserAuthDatabase(dbDriver, sqlitePath, databaseUrl));
+  const browserAuth =
+    authConfig.authMode === "oauth"
+      ? createBrowserAuth(env, createBrowserAuthDatabase(dbDriver, sqlitePath, databaseUrl))
+      : undefined;
 
   const storage = new S3ArtifactStorage({
     bucket: parsedEnv.S3_BUCKET,

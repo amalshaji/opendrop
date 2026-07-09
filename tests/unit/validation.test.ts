@@ -18,6 +18,18 @@ describe("upload validation", () => {
     expect(result.acceptedFiles.map((file) => file.path)).toEqual(["index.html", "assets/app.css"]);
   });
 
+  it("derives content types from normalized paths instead of uploader claims", async () => {
+    const result = await validateUploadFiles([
+      { path: "index.html", bytes: new TextEncoder().encode("ok"), contentType: "application/octet-stream" },
+      { path: "assets/logo.svg", bytes: new TextEncoder().encode("<svg/>"), contentType: "text/html" }
+    ]);
+
+    expect(result.acceptedFiles.map(({ path, contentType }) => ({ path, contentType }))).toEqual([
+      { path: "index.html", contentType: "text/html; charset=utf-8" },
+      { path: "assets/logo.svg", contentType: "image/svg+xml" }
+    ]);
+  });
+
   it("strips a single uploaded folder prefix when it contains index.html", async () => {
     const result = await validateUploadFiles([
       { path: "valid-site/index.html", bytes: new TextEncoder().encode("<h1>Home</h1>") },
