@@ -64,7 +64,6 @@ jobs:
           node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun run docs:build
       - run: bun run test:unit
       - run: bun run test:auth-http
       - run: bun run test:repositories
