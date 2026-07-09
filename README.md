@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./apps/web/public/opendrop-logo.svg" alt="OpenDrop logo" width="56">
+</p>
+
 # OpenDrop
 
 OpenDrop is an open-source TypeScript app for publishing static HTML drops with validation, versioned URLs, public/private previews, and review annotations.
