@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "opendrop": "./dist/index.js"
+    "opendrop": "dist/index.js"
   },
   "exports": {
     ".": "./dist/index.js"
@@ -18,7 +18,7 @@
     "build": "bun build ./src/index.ts --target=node --outfile=dist/index.js && bun scripts/ensure-bin.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "bun src/index.ts",
-    "pack:dry-run": "bun pm pack --dry-run"
+    "pack:dry-run": "npm pack --dry-run"
   },
   "dependencies": {
     "commander": "^14.0.0",

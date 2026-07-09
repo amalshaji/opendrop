@@ -30,6 +30,7 @@ jobs:
       - name: Publish CLI
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: ${{ github.event.repository.private == false }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TARGET: cli
           RELEASE_PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -40,7 +41,7 @@ jobs:
           VERSION=$(bun -e "console.log(require('./apps/cli/package.json').version)")
           bun run --cwd apps/cli build
           cd apps/cli
-          npm publish --access public --provenance
+          npm publish --access public
           cd ../..
           git tag cli-v$VERSION
           git push origin cli-v$VERSION
