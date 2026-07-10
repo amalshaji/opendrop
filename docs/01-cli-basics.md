@@ -61,6 +61,17 @@ opendrop versions amal/homepage
 
 Use `fetch --include html,annotations` when an agent needs both rendered page HTML and review comments. Use `annotations` when you only need comment state.
 
+Create a page-level note, reply to it, and update its resolved state:
+
+```bash
+opendrop annotation add amal/homepage --body "Tighten the hero copy." --path / --version-id ver_123 --tag copy
+opendrop annotation reply amal/homepage ann_123 --body "Updated in the next draft."
+opendrop annotation resolve amal/homepage ann_123
+opendrop annotation reopen amal/homepage ann_123
+```
+
+`annotation add` creates a page-level note at the center of a deterministic 1280 x 720 viewport. Use the browser review room to author visual pins and highlights. Replies inherit the parent annotation's version, page path, shape, and viewport.
+
 ## Namespaces
 
 ```bash
