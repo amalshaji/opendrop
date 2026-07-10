@@ -1,4 +1,4 @@
-import type { AnnotationInput, FileManifestEntry, Visibility } from "../core";
+import type { AnnotationInput, FileManifestEntry, UploadSessionStatus as CoreUploadSessionStatus, Visibility } from "../core";
 
 export interface UserRecord {
   id: string;
@@ -70,6 +70,22 @@ export interface DeploymentFileRecord extends FileManifestEntry {
 export interface DeploymentWithVersion {
   family: DeploymentFamilyRecord;
   version: DeploymentVersionRecord;
+}
+
+export interface UploadSessionRecord {
+  id: string;
+  ownerUserId: string;
+  namespace: string;
+  slug: string;
+  visibility: Visibility;
+  versionId: string;
+  manifestHash: string;
+  manifest: FileManifestEntry[];
+  status: CoreUploadSessionStatus;
+  failureReason: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AnnotationRecord {

@@ -1,4 +1,12 @@
-import type { Visibility } from "@opendrop/shared/core";
+import {
+  filesFromZip,
+  prepareDirectUpload,
+  runDirectUpload,
+  type DirectUploadResult,
+  type PreparedUpload,
+  type UploadFileLike,
+  type Visibility
+} from "@opendrop/shared/core";
 import type { WebkitDataTransferItem, WebkitDirectoryEntry, WebkitEntry, WebkitFileEntry } from "./types";
 
 export function uploadFormData(files: File[], metadata: { namespace?: string; slug?: string; visibility?: Visibility }) {
@@ -10,6 +18,35 @@ export function uploadFormData(files: File[], metadata: { namespace?: string; sl
   if (metadata.slug) data.append("slug", metadata.slug);
   if (metadata.visibility) data.append("visibility", metadata.visibility);
   return data;
+}
+
+export async function prepareBrowserUpload(files: File[]): Promise<PreparedUpload> {
+  return prepareDirectUpload(await prepareUploadFiles(files));
+}
+
+export async function publishDirectUpload(
+  prepared: PreparedUpload,
+  metadata: { namespace?: string; slug?: string; visibility?: Visibility },
+  onProgress: (completed: number, total: number) => void
+): Promise<DirectUploadResult> {
+  return runDirectUpload(prepared, metadata, {
+    request: (path, init) => fetch(path, { ...init, credentials: "include" })
+  }, onProgress);
+}
+
+async function prepareUploadFiles(files: File[]): Promise<UploadFileLike[]> {
+  if (files.length === 1 && (files[0]!.name.toLowerCase().endsWith(".zip") || files[0]!.type === "application/zip")) {
+    return filesFromZip(new Uint8Array(await files[0]!.arrayBuffer()));
+  }
+  const prepared: UploadFileLike[] = [];
+  for (const file of files) {
+    prepared.push({
+      path: uploadPath(file),
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type || undefined
+    });
+  }
+  return prepared;
 }
 
 export function uploadPath(file: File): string {

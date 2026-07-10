@@ -4,9 +4,11 @@ import {
   annotationViewportSchema,
   namespaceCandidateForEmail,
   namespaceCollisionSuffix,
+  uploadSessionStatusSchema,
+  uploadSessionManifestSchema,
   validateNamespace
 } from "../core";
-import type { AnnotationInput, Visibility } from "../core";
+import type { AnnotationInput, UploadSessionStatus, Visibility } from "../core";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -14,9 +16,11 @@ import type {
   DeploymentVersionRecord,
   NamespaceAccessRecord,
   NamespaceMemberRecord,
-  NamespaceRecord
+  NamespaceRecord,
+  UploadSessionRecord
 } from "./types";
 import { parseJsonColumn } from "./mappers";
+import type { FinalizeUploadSessionClaim } from "./repository";
 
 interface DeploymentFamilyRow extends Omit<DeploymentFamilyRecord, "visibility"> {
   visibility: string;
@@ -42,6 +46,22 @@ interface AnnotationRow {
   shapeJson: string;
   viewportJson: string;
   resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UploadSessionRow {
+  id: string;
+  ownerUserId: string;
+  namespaceName: string;
+  slug: string;
+  visibility: string;
+  versionId: string;
+  manifestHash: string;
+  manifestJson: string;
+  status: string;
+  failureReason: string | null;
+  expiresAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,6 +103,31 @@ export function mapDbAnnotation(row: AnnotationRow): AnnotationRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
+}
+
+export function mapUploadSession(row: UploadSessionRow): UploadSessionRecord {
+  return {
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    namespace: row.namespaceName,
+    slug: row.slug,
+    visibility: row.visibility as Visibility,
+    versionId: row.versionId,
+    manifestHash: row.manifestHash,
+    manifest: parseJsonColumn(uploadSessionManifestSchema, row.manifestJson),
+    status: uploadSessionStatusSchema.parse(row.status),
+    failureReason: row.failureReason,
+    expiresAt: row.expiresAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+export function uploadSessionClaimResult(session: UploadSessionRecord, claimed: boolean): FinalizeUploadSessionClaim {
+  if (claimed) return { outcome: "claimed", session };
+  if (session.status === "completed") return { outcome: "completed", session };
+  if (session.status === "failed") return { outcome: "failed", session };
+  return { outcome: "in_progress", session };
 }
 
 export function namespaceRole(role: string): "owner" | "publisher" {

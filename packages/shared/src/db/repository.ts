@@ -1,4 +1,4 @@
-import type { AnnotationInput, FileManifestEntry, Visibility } from "../core";
+import type { AnnotationInput, FileManifestEntry, UploadSessionStatus, Visibility } from "../core";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -9,6 +9,7 @@ import type {
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
+  UploadSessionRecord,
   UserRecord
 } from "./types";
 
@@ -21,6 +22,41 @@ export interface CreateVersionInput {
   manifestHash: string;
   files: Array<FileManifestEntry & { storageKey: string }>;
 }
+
+export interface CreateUploadSessionInput {
+  id: string;
+  ownerUserId: string;
+  namespace: string;
+  slug: string;
+  visibility: Visibility;
+  versionId: string;
+  manifestHash: string;
+  manifest: FileManifestEntry[];
+  expiresAt: string;
+}
+
+export interface FailUploadSessionInput {
+  sessionId: string;
+  ownerUserId: string;
+  expectedStatus: Extract<UploadSessionStatus, "pending" | "finalizing">;
+  reason: string;
+}
+
+export interface CompleteUploadSessionInput {
+  sessionId: string;
+  ownerUserId: string;
+  deployment: CreateVersionInput;
+}
+
+export interface FailUploadSessionResult {
+  failed: boolean;
+  session: UploadSessionRecord;
+}
+
+export type FinalizeUploadSessionClaim = {
+  outcome: "claimed" | "in_progress" | "completed" | "failed";
+  session: UploadSessionRecord;
+};
 
 export type DeviceTokenExchangeResult =
   | { status: "issued"; expiresAt: string }
@@ -65,6 +101,15 @@ export interface OpenDropRepository {
   getDeploymentFamily(namespace: string, slug: string): Promise<DeploymentFamilyRecord | null>;
   listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]>;
   createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion>;
+  createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord>;
+  getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null>;
+  claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): Promise<FinalizeUploadSessionClaim | null>;
+  failUploadSession(input: FailUploadSessionInput): Promise<FailUploadSessionResult>;
+  completeUploadSession(input: CompleteUploadSessionInput): Promise<DeploymentWithVersion>;
   setDeploymentVisibility(namespace: string, slug: string, visibility: Visibility, userId: string): Promise<DeploymentFamilyRecord>;
   restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion>;
   getDeploymentVersion(namespace: string, slug: string, versionId?: string): Promise<DeploymentWithVersion | null>;

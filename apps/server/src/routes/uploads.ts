@@ -19,6 +19,8 @@ import type { OpenDropRepository } from "@opendrop/shared/db/repository";
 import type { ArtifactStorage } from "@opendrop/shared/storage/interface";
 import type { AppBindings, OpenDropContext } from "@/app-types";
 import { repositoryMutationError, requireAuth, validationError } from "@/http-helpers";
+import { registerUploadSessionRoutes } from "@/upload-sessions";
+import { publishResponse } from "@/upload-response";
 
 const submittedFormFileSchema = z.custom<File>(
   (value): value is File => typeof value === "object" && value !== null && "arrayBuffer" in value && "name" in value,
@@ -34,6 +36,7 @@ interface UploadRouteOptions {
 }
 
 export function registerUploadRoutes(app: Hono<AppBindings>, { repo, storage, authConfig }: UploadRouteOptions) {
+  registerUploadSessionRoutes(app, { repo, storage, authConfig });
   app.post("/api/uploads/validate", async (c) => {
     const auth = requireAuth(c);
     if (auth instanceof Response) return auth;
@@ -100,16 +103,7 @@ export function registerUploadRoutes(app: Hono<AppBindings>, { repo, storage, au
       return version;
     }
 
-    return c.json({
-      namespace,
-      slug,
-      visibility,
-      url: `/${namespace}/${slug}`,
-      versionUrl: `/${namespace}/${slug}?version=${encodeURIComponent(version.version.id)}`,
-      family: version.family,
-      version: version.version,
-      validation
-    });
+    return c.json(publishResponse(namespace, slug, visibility, version, validation));
   });
 }
 

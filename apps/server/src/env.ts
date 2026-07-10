@@ -21,6 +21,7 @@ const runtimeEnvSchema = z.object({
   OPENDROP_STORAGE_DRIVER: z.enum(["s3"]).optional().default("s3"),
   S3_BUCKET: z.string().min(1).optional().default("opendrop"),
   S3_ENDPOINT: z.string().url().optional(),
+  S3_PRESIGN_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().min(1).optional().default("us-east-1"),
   S3_ACCESS_KEY_ID: z.string().min(1).optional().default("opendrop"),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional().default("opendrop-secret"),
@@ -48,6 +49,7 @@ export async function createRuntimeServices(env: Record<string, string | undefin
   const storage = new S3ArtifactStorage({
     bucket: parsedEnv.S3_BUCKET,
     endpoint: parsedEnv.S3_ENDPOINT,
+    presignEndpoint: parsedEnv.S3_PRESIGN_ENDPOINT,
     region: parsedEnv.S3_REGION,
     accessKeyId: parsedEnv.S3_ACCESS_KEY_ID,
     secretAccessKey: parsedEnv.S3_SECRET_ACCESS_KEY,

@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   uploadMetadataSchema,
+  publishResultSchema,
   validationResultSchema,
+  type PreparedUpload,
   type ValidationResult,
   type Visibility
 } from "@opendrop/shared/core";
 import { validationMessage } from "@/app/format";
-import { filesFromDataTransfer, uploadFormData, uploadPath } from "@/app/upload-files";
+import { filesFromDataTransfer, prepareBrowserUpload, publishDirectUpload, uploadFormData } from "@/app/upload-files";
 import type { PublishResult, Session } from "@/app/types";
 
 interface UseUploadWorkflowOptions {
@@ -23,10 +25,12 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
   const [slug, setSlug] = useState("");
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [preparedUpload, setPreparedUpload] = useState<PreparedUpload | null>(null);
   const [lastPublished, setLastPublished] = useState<PublishResult | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const zipInputRef = useRef<HTMLInputElement | null>(null);
+  const validationGenerationRef = useRef(0);
 
   useEffect(() => {
     if (session?.user) {
@@ -34,18 +38,6 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
       setVisibility(session.defaultVisibility);
     }
   }, [session]);
-
-  const formData = useMemo(() => {
-    const data = new FormData();
-    for (const file of files) {
-      const path = uploadPath(file);
-      data.append("files", file, path);
-    }
-    if (namespace.trim()) data.append("namespace", namespace);
-    if (slug.trim()) data.append("slug", slug);
-    data.append("visibility", visibility);
-    return data;
-  }, [files, namespace, slug, visibility]);
 
   useEffect(() => {
     if (files.length > 0) {
@@ -58,15 +50,18 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
   const lastPublishedDisplayUrl = lastPublishedHref ? `${location.origin}${lastPublishedHref}` : "";
 
   async function validate() {
+    const generation = validationGenerationRef.current;
     setStatus("Validating upload...");
-    const response = await fetch("/api/uploads/validate", { method: "POST", credentials: "include", body: formData });
-    const result = validationResultSchema.safeParse(await response.json());
+    const prepared = await prepareBrowserUpload(files);
+    if (generation !== validationGenerationRef.current) return;
+    const result = validationResultSchema.safeParse(prepared.validation);
     if (!result.success) {
       setStatus("Validation response was invalid.");
       return;
     }
+    setPreparedUpload(prepared);
     setValidation(result.data);
-    setStatus(response.ok ? "Ready to publish." : "Validation needs attention.");
+    setStatus(result.data.ok ? "Ready to publish." : "Validation needs attention.");
   }
 
   async function publishUpload() {
@@ -80,17 +75,35 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
       return;
     }
     setIsPublishing(true);
-    setStatus("Publishing version...");
+    setStatus("Preparing upload...");
     try {
-      const response = await fetch("/api/uploads/publish", { method: "POST", credentials: "include", body: uploadFormData(files, metadata.data) });
-      const result = await response.json();
-      if (!response.ok) {
-        setStatus(result.error || "Publish failed.");
-        return;
+      if (!preparedUpload) throw new Error("Upload validation has not completed.");
+      const direct = await publishDirectUpload(preparedUpload, metadata.data, (completed, total) => {
+        setStatus(`Uploading ${completed} of ${total} files...`);
+      });
+      let result: PublishResult;
+      if (direct.kind === "unavailable") {
+        setStatus("Direct upload unavailable. Publishing version...");
+        const response = await fetch("/api/uploads/publish", {
+          method: "POST",
+          credentials: "include",
+          body: uploadFormData(files, metadata.data)
+        });
+        const responseBody = await response.json();
+        if (!response.ok) {
+          setStatus(typeof responseBody?.error === "string" ? responseBody.error : "Publish failed.");
+          return;
+        }
+        result = publishResultSchema.parse(responseBody);
+      } else {
+        setStatus("Finalizing version...");
+        result = direct.result;
       }
       setLastPublished(result);
       setStatus("Published.");
       await onPublished(result);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Publish failed.");
     } finally {
       setIsPublishing(false);
     }
@@ -115,14 +128,18 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
     if (acceptedFiles.length === 0) return;
 
     setFiles(acceptedFiles);
+    validationGenerationRef.current += 1;
     setValidation(null);
+    setPreparedUpload(null);
     setLastPublished(null);
     setStatus(source === "drop" ? "Files dropped. Validating..." : "Files selected. Validating...");
   }
 
   function clearUploadFiles() {
+    validationGenerationRef.current += 1;
     setFiles([]);
     setValidation(null);
+    setPreparedUpload(null);
     setLastPublished(null);
     setUploadErrors([]);
     setStatus("Upload cleared.");

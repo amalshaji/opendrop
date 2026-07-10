@@ -30,16 +30,6 @@ export type NamespaceMember = {
   createdAt: string;
 };
 
-export type PublishResult = {
-  namespace: string;
-  slug: string;
-  visibility: Visibility;
-  url: string;
-  versionUrl: string;
-  family: { ownerUserId: string; latestVersionId: string; visibility: Visibility };
-  version: { id: string; versionNumber: number; createdAt: string };
-};
-
 export type DeploymentVersion = {
   id: string;
   versionNumber: number;
@@ -108,4 +98,13 @@ export type WebkitDirectoryEntry = WebkitEntry & {
 
 export type WebkitDataTransferItem = DataTransferItem & {
   webkitGetAsEntry?: () => WebkitEntry | null;
+};
+export type PublishResult = {
+  namespace: string;
+  slug: string;
+  visibility: Visibility;
+  url: string;
+  versionUrl: string;
+  family: { ownerUserId: string; latestVersionId: string; visibility: Visibility };
+  version: { id: string; versionNumber: number; createdAt: string };
 };

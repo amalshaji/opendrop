@@ -6,7 +6,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateVersionInput, OpenDropRepository } from "./repository";
+import type { CompleteUploadSessionInput, CreateUploadSessionInput, CreateVersionInput, FailUploadSessionInput, FailUploadSessionResult, FinalizeUploadSessionClaim, OpenDropRepository } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -17,6 +17,7 @@ import type {
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
+  UploadSessionRecord,
   UserRecord
 } from "./types";
 import {
@@ -26,8 +27,10 @@ import {
   mapDeploymentFamily,
   mapDeploymentFile,
   mapDeploymentVersion,
+  mapUploadSession,
   namespaceAccessRecords,
-  namespaceMemberRecord
+  namespaceMemberRecord,
+  uploadSessionClaimResult
 } from "./domain";
 import { decideDeviceTokenExchange } from "./device-authorization";
 import { sqliteOpenDropSchema } from "./schema";
@@ -476,8 +479,87 @@ export class D1OpenDropRepository implements OpenDropRepository {
     }));
   }
 
+  async createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord> {
+    const now = nowIso();
+    await this.orm.insert(sqliteOpenDropSchema.uploadSessions).values({
+      id: input.id,
+      ownerUserId: input.ownerUserId,
+      namespaceName: input.namespace,
+      slug: input.slug,
+      visibility: input.visibility,
+      versionId: input.versionId,
+      manifestHash: input.manifestHash,
+      manifestJson: JSON.stringify(input.manifest),
+      status: "pending",
+      failureReason: null,
+      expiresAt: input.expiresAt,
+      createdAt: now,
+      updatedAt: now
+    });
+    const record = await this.getUploadSessionForOwner(input.id, input.ownerUserId);
+    if (!record) throw new Error("Upload session could not be created.");
+    return record;
+  }
+
+  async getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null> {
+    const row = await this.orm
+      .select()
+      .from(sqliteOpenDropSchema.uploadSessions)
+      .where(and(eq(sqliteOpenDropSchema.uploadSessions.id, sessionId), eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
+      .get();
+    return row ? mapUploadSession(row) : null;
+  }
+
+  async claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): Promise<FinalizeUploadSessionClaim | null> {
+    const result = await this.db
+      .prepare("update upload_sessions set status = ?, expires_at = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
+      .bind("finalizing", finalizationExpiresAt, nowIso(), sessionId, ownerUserId, "pending")
+      .run();
+    const session = await this.getUploadSessionForOwner(sessionId, ownerUserId);
+    return session ? uploadSessionClaimResult(session, Number(result.meta?.changes ?? 0) > 0) : null;
+  }
+
+  async failUploadSession(input: FailUploadSessionInput): Promise<FailUploadSessionResult> {
+    const result = await this.db
+      .prepare("update upload_sessions set status = ?, failure_reason = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
+      .bind("failed", input.reason, nowIso(), input.sessionId, input.ownerUserId, input.expectedStatus)
+      .run();
+    const session = await this.getUploadSessionForOwner(input.sessionId, input.ownerUserId);
+    if (!session) throw new Error("Upload session not found.");
+    return { failed: Number(result.meta?.changes ?? 0) > 0, session };
+  }
+
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {
+    return this.persistDeploymentVersion(input);
+  }
+
+  async completeUploadSession(input: CompleteUploadSessionInput): Promise<DeploymentWithVersion> {
+    return this.persistDeploymentVersion(input.deployment, input);
+  }
+
+  private async persistDeploymentVersion(
+    input: CreateVersionInput,
+    completion?: Pick<CompleteUploadSessionInput, "sessionId" | "ownerUserId">
+  ): Promise<DeploymentWithVersion> {
     return this.orm.transaction(async (tx) => {
+      const now = nowIso();
+      if (completion) {
+        const completed = await tx
+          .update(sqliteOpenDropSchema.uploadSessions)
+          .set({ status: "completed", failureReason: null, updatedAt: now })
+          .where(and(
+            eq(sqliteOpenDropSchema.uploadSessions.id, completion.sessionId),
+            eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, completion.ownerUserId),
+            eq(sqliteOpenDropSchema.uploadSessions.status, "finalizing")
+          ))
+          .returning({ id: sqliteOpenDropSchema.uploadSessions.id })
+          .get();
+        if (!completed) throw new Error("Upload session is not claimed for finalization.");
+      }
       const namespace = await tx.select().from(sqliteOpenDropSchema.namespaces).where(eq(sqliteOpenDropSchema.namespaces.name, input.namespace)).get();
       if (!namespace) throw new Error("Namespace not found.");
       const ownedNamespace = await tx
@@ -503,7 +585,6 @@ export class D1OpenDropRepository implements OpenDropRepository {
         throw new Error("User cannot publish to this namespace.");
       }
 
-      const now = nowIso();
       let family = await tx
         .select()
         .from(sqliteOpenDropSchema.deploymentFamilies)
