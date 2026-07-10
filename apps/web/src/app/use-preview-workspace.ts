@@ -86,7 +86,7 @@ export function usePreviewWorkspace({ previewRoute, session, setStatus }: UsePre
     const target = iframeRef.current?.contentWindow;
     if (!target) return;
     const roots = annotations.filter((item) => !item.parentAnnotationId && (showResolved || !item.resolvedAt));
-    const markers = roots.map((item, index) => ({
+    const markers = roots.filter((item) => item.shape.type !== "page").map((item, index) => ({
       id: item.id,
       shape: item.shape,
       resolved: Boolean(item.resolvedAt),

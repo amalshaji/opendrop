@@ -12,6 +12,20 @@ OpenDrop is an open-source TypeScript app for publishing static HTML drops with 
 
 It accepts a folder or zip, validates the artifact, stores immutable versions, renders the uploaded site from object storage, and keeps review comments attached to the exact version and page.
 
+## Product Tour
+
+### Publish a static drop
+
+Upload a build folder or zip, review the server checks, choose a namespace and visibility, then publish an immutable preview.
+
+![Publish a static drop](./docs/public/screenshots/publish-static-drop.png)
+
+### Review in context
+
+Leave point comments or text highlights directly on a preview, reply in threads, and resolve feedback without losing version context.
+
+![Review comments in context](./docs/public/screenshots/review-comments.png)
+
 ## CLI Quick Start
 
 Authenticate, upload a static build, then fetch review context:

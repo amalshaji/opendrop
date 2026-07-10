@@ -78,23 +78,55 @@ test("cli uploads and fetches a page", async ({ request }) => {
   const versions = await exec("bun", cliArgs("versions", `cli/${slug}`, "--server", serverUrl), { env });
   expect(versions.stdout).toContain(uploadResult.version.id);
 
-  await request.post(`${serverUrl}/api/deployments/cli/${slug}/annotations`, {
-    headers: { authorization: `Bearer ${token}` },
-    data: {
-      versionId: uploadResult.version.id,
-      pagePath: "/",
-      body: "CLI-visible annotation",
-      tags: ["cli"],
-      shape: { type: "pin", x: 0.4, y: 0.4 },
-      viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 }
-    }
+  const versionTarget = `${serverUrl}/cli/${slug}/versions/${uploadResult.version.id}`;
+  const added = await exec("bun", cliArgs("annotation", "add", versionTarget, "--server", serverUrl, "--body", "CLI-visible annotation", "--tag", "cli", "--tag", "agent"), {
+    env
   });
+  const addedResult = JSON.parse(added.stdout);
+  expect(addedResult.annotation).toMatchObject({
+    versionId: uploadResult.version.id,
+    pagePath: "/",
+    body: "CLI-visible annotation",
+    tags: ["cli", "agent"],
+    shape: { type: "page" },
+    viewport: null
+  });
+
+  const reply = await exec(
+    "bun",
+    cliArgs("annotation", "reply", versionTarget, addedResult.annotation.id, "--server", serverUrl, "--body", "CLI reply"),
+    { env }
+  );
+  const replyResult = JSON.parse(reply.stdout);
+  expect(replyResult.annotation).toMatchObject({
+    versionId: uploadResult.version.id,
+    pagePath: "/",
+    parentAnnotationId: addedResult.annotation.id,
+    body: "CLI reply",
+    shape: addedResult.annotation.shape,
+    viewport: addedResult.annotation.viewport
+  });
+
+  const resolved = await exec("bun", cliArgs("annotation", "resolve", `cli/${slug}`, addedResult.annotation.id, "--server", serverUrl), { env });
+  expect(JSON.parse(resolved.stdout).annotation.resolvedAt).not.toBeNull();
+  const reopened = await exec("bun", cliArgs("annotation", "reopen", `cli/${slug}`, addedResult.annotation.id, "--server", serverUrl), { env });
+  expect(JSON.parse(reopened.stdout).annotation.resolvedAt).toBeNull();
+
   const annotations = await exec("bun", cliArgs("annotations", `cli/${slug}`, "--server", serverUrl, "--version-id", uploadResult.version.id), { env });
   expect(annotations.stdout).toContain("CLI-visible annotation");
+  expect(annotations.stdout).toContain("CLI reply");
   const annotationsByVersionUrl = await exec("bun", cliArgs("annotations", `${serverUrl}/cli/${slug}/versions/${uploadResult.version.id}`, "--server", serverUrl), {
     env
   });
   expect(annotationsByVersionUrl.stdout).toContain("CLI-visible annotation");
+  const fetchedAnnotations = await exec("bun", cliArgs("fetch", versionTarget, "--server", serverUrl, "--include", "annotations"), { env });
+  const fetchedAnnotationList = JSON.parse(fetchedAnnotations.stdout).annotations;
+  expect(fetchedAnnotationList).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: addedResult.annotation.id, resolvedAt: null }),
+      expect.objectContaining({ id: replyResult.annotation.id, parentAnnotationId: addedResult.annotation.id })
+    ])
+  );
 });
 
 test("cli login completes device flow and stores local config", async ({ request }) => {

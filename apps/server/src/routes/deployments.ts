@@ -3,7 +3,9 @@ import type { OpenDropAuthConfig } from "@opendrop/shared/auth";
 import {
   annotationIdParamSchema,
   annotationInputSchema,
+  annotationPageNoteInputSchema,
   annotationQuerySchema,
+  annotationReplyInputSchema,
   annotationResolveInputSchema,
   deploymentRefSchema,
   pagePathToArtifactPath,
@@ -135,6 +137,54 @@ export function registerDeploymentApiRoutes(app: Hono<AppBindings>, { repo, stor
         annotations: "untrusted-user-content"
       }
     });
+  });
+
+  app.post("/api/deployments/:namespace/:slug/annotations/page-notes", async (c) => {
+    const auth = requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const params = deploymentRefSchema.safeParse(c.req.param());
+    if (!params.success) return validationError(c, params.error);
+    const input = annotationPageNoteInputSchema.safeParse(await jsonObject(c));
+    if (!input.success) return validationError(c, input.error);
+    const [annotation] = await withAnnotationAuthors(repo, [
+      await repo.createAnnotation(
+        params.data.namespace,
+        params.data.slug,
+        { ...input.data, shape: { type: "page" }, viewport: null },
+        auth.user.id
+      )
+    ]);
+    return c.json({ annotation }, 201);
+  });
+
+  app.post("/api/deployments/:namespace/:slug/annotations/:annotationId/replies", async (c) => {
+    const auth = requireAuth(c);
+    if (auth instanceof Response) return auth;
+    const params = deploymentRefSchema.safeParse(c.req.param());
+    if (!params.success) return validationError(c, params.error);
+    const annotationParams = annotationIdParamSchema.safeParse(c.req.param());
+    if (!annotationParams.success) return validationError(c, annotationParams.error);
+    const input = annotationReplyInputSchema.safeParse(await jsonObject(c));
+    if (!input.success) return validationError(c, input.error);
+    const parent = await repo.getAnnotation(params.data.namespace, params.data.slug, annotationParams.data.annotationId);
+    if (!parent) return c.json({ error: "Parent annotation not found." }, 404);
+    const [annotation] = await withAnnotationAuthors(repo, [
+      await repo.createAnnotation(
+        params.data.namespace,
+        params.data.slug,
+        {
+          versionId: parent.versionId,
+          pagePath: parent.pagePath,
+          parentAnnotationId: parent.id,
+          body: input.data.body,
+          tags: input.data.tags,
+          shape: parent.shape,
+          viewport: parent.viewport
+        },
+        auth.user.id
+      )
+    ]);
+    return c.json({ annotation }, 201);
   });
 
   app.post("/api/deployments/:namespace/:slug/annotations", async (c) => {

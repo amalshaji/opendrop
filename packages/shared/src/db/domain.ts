@@ -98,7 +98,7 @@ export function mapDbAnnotation(row: AnnotationRow): AnnotationRecord {
     body: row.body,
     tags: parseJsonColumn(annotationTagsSchema, row.tagsJson),
     shape: parseJsonColumn(annotationShapeSchema, row.shapeJson),
-    viewport: parseJsonColumn(annotationViewportSchema, row.viewportJson),
+    viewport: parseJsonColumn(annotationViewportSchema.nullable(), row.viewportJson),
     resolvedAt: row.resolvedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt

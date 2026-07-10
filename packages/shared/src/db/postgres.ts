@@ -764,6 +764,17 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     return row ? mapDeploymentFile(row) : null;
   }
 
+  async getAnnotation(namespace: string, slug: string, annotationId: string): Promise<AnnotationRecord | null> {
+    const family = await this.getDeploymentFamily(namespace, slug);
+    if (!family) return null;
+    const [row] = await this.orm
+      .select()
+      .from(pgOpenDropSchema.annotations)
+      .where(and(eq(pgOpenDropSchema.annotations.id, annotationId), eq(pgOpenDropSchema.annotations.familyId, family.id)))
+      .limit(1);
+    return row ? mapDbAnnotation(row) : null;
+  }
+
   async createAnnotation(namespace: string, slug: string, input: AnnotationInput, userId: string): Promise<AnnotationRecord> {
     const deployment = await this.getDeploymentVersion(namespace, slug, input.versionId);
     if (!deployment) throw new Error("Deployment not found.");

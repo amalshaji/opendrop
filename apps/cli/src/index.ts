@@ -3,9 +3,7 @@ import { Command } from "commander";
 import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import {
-  annotationQuerySchema,
   deploymentRefInputSchema,
-  deploymentTargetSchema,
   deviceCodeResponseSchema,
   deviceCodeBodySchema,
   deviceTokenBodySchema,
@@ -20,6 +18,8 @@ import {
 } from "@opendrop/shared/core";
 import { z } from "zod";
 import { readCliConfig, resolveDeploymentUrl, resolveServer, setConfigValue, writeCliConfig } from "@/config";
+import { parseDeploymentTarget, searchParams, validationMessage } from "@/command-helpers";
+import { registerAnnotationCommands } from "@/commands/annotation";
 import { collectUploadFiles } from "@/files";
 import { apiFetch } from "@/http";
 import { publishDirectUpload } from "@/upload-session";
@@ -43,10 +43,6 @@ const fetchOptionsSchema = serverOptionSchema.extend({
   path: z.string().min(1).default("/"),
   versionId: z.string().optional(),
   include: z.string().default("html,annotations")
-});
-const annotationsOptionsSchema = serverOptionSchema.extend({
-  path: z.string().optional(),
-  versionId: z.string().optional()
 });
 const configCommandSchema = z
   .object({
@@ -284,22 +280,7 @@ program
     console.log(JSON.stringify(output, null, 2));
   });
 
-program
-  .command("annotations")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .option("--server <url>", "OpenDrop server URL")
-  .option("--path <path>", "Page path")
-  .option("--version-id <versionId>", "Version id")
-  .action(async (target, options) => {
-    const parsedOptions = annotationsOptionsSchema.safeParse(options);
-    if (!parsedOptions.success) throw new Error(validationMessage(parsedOptions.error));
-    const { namespace, slug, versionId } = parseDeploymentTarget(target);
-    const query = annotationQuerySchema.safeParse({ path: parsedOptions.data.path, versionId: parsedOptions.data.versionId ?? versionId });
-    if (!query.success) throw new Error(validationMessage(query.error));
-    const params = searchParams(query.data);
-    const response = await apiFetch(`/api/deployments/${namespace}/${slug}/annotations?${params}`, { server: parsedOptions.data.server });
-    console.log(JSON.stringify(await response.json(), null, 2));
-  });
+registerAnnotationCommands(program);
 
 program.parseAsync().catch((error) => {
   console.error(error.message);
@@ -345,24 +326,10 @@ function parseDeploymentRef(ref: string): { namespace: string; slug: string } {
   return parsed.data;
 }
 
-function parseDeploymentTarget(target: string): { namespace: string; slug: string; versionId?: string } {
-  const parsed = deploymentTargetSchema.safeParse(target);
-  if (!parsed.success) throw new Error("Expected namespace/slug or preview URL. " + validationMessage(parsed.error));
-  return parsed.data;
-}
-
 function parseInclude(value: unknown): Array<"html" | "manifest" | "annotations"> {
   const parsed = fetchIncludeSchema.safeParse(value);
   if (!parsed.success) throw new Error(validationMessage(parsed.error));
   return parsed.data;
-}
-
-function searchParams(values: Record<string, unknown>): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(values)) {
-    if (typeof value === "string") params.set(key, value);
-  }
-  return params;
 }
 
 function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
@@ -383,15 +350,4 @@ async function publishMultipart(
   if (metadata.visibility) form.append("visibility", metadata.visibility);
   const response = await apiFetch("/api/uploads/publish", { server, method: "POST", body: form });
   return response.json() as Promise<Record<string, unknown>>;
-}
-
-function validationMessage(error: unknown): string {
-  const issues = typeof error === "object" && error !== null && "issues" in error ? (error as { issues?: unknown }).issues : null;
-  if (!Array.isArray(issues)) return String(error);
-  return issues
-    .map((issue) => {
-      const item = issue as { path?: Array<string | number>; message?: string };
-      return `${item.path?.join(".") || "value"}: ${item.message ?? "Invalid value."}`;
-    })
-    .join("; ");
 }

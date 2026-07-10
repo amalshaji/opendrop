@@ -63,7 +63,7 @@ export type AnnotationRecord = {
   body: string;
   tags: string[];
   shape: AnnotationShape;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number } | null;
   resolvedAt: string | null;
   createdAt: string;
 };

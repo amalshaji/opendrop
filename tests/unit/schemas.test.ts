@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   annotationInputSchema,
+  annotationPageNoteInputSchema,
+  annotationReplyInputSchema,
   annotationResolveInputSchema,
   artifactRoutePathSchema,
   deviceCodeResponseSchema,
@@ -128,6 +130,16 @@ describe("zod request schemas", () => {
       })
     ).toMatchObject({ parentAnnotationId: "ann_123", pagePath: "/" });
     expect(annotationResolveInputSchema.parse({ resolved: true })).toEqual({ resolved: true });
+    expect(annotationPageNoteInputSchema.parse({ body: "Page note" })).toEqual({
+      body: "Page note",
+      pagePath: "/",
+      tags: []
+    });
+    expect(annotationReplyInputSchema.parse({ body: "Reply" })).toEqual({ body: "Reply", tags: [] });
+    expect(annotationInputSchema.parse({ body: "Page note", shape: { type: "page" }, viewport: null })).toMatchObject({
+      shape: { type: "page" },
+      viewport: null
+    });
   });
 
   it("rejects unsafe page and artifact paths", () => {
