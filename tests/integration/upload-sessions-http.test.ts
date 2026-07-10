@@ -80,6 +80,49 @@ describe("direct upload sessions", () => {
     expect(storage.deletedPrefixes).toHaveLength(0);
   });
 
+  it("renews the finalization lease before the original upload expiry can race cleanup", async () => {
+    await app.fetch(sessionRequest("owner@example.com"));
+    const repository = repo.asRepository();
+    const user = await repository.getUserByIdentity("dev", "owner@example.com");
+    const originalExpiresAt = new Date(Date.now() + 500).toISOString();
+    const hash = await manifestHash([indexEntry]);
+    await repository.createUploadSession({
+      id: "upl_near_expiry",
+      ownerUserId: user!.id,
+      namespace: user!.defaultNamespace,
+      slug: "near-expiry",
+      visibility: "public",
+      versionId: "ver_near_expiry",
+      manifestHash: hash,
+      manifest: [indexEntry],
+      expiresAt: originalExpiresAt
+    });
+    await storage.putObject(
+      storageKey(user!.defaultNamespace, "near-expiry", "ver_near_expiry", "index.html"),
+      indexBytes,
+      indexEntry.contentType
+    );
+
+    const barrier = storage.blockNextRead();
+    const claimant = app.fetch(finalizeRequest("upl_near_expiry", "owner@example.com"));
+    await barrier.started;
+    const claimedSession = await repository.getUploadSessionForOwner("upl_near_expiry", user!.id);
+    expect(claimedSession?.status).toBe("finalizing");
+    expect(Date.parse(claimedSession!.expiresAt)).toBeGreaterThan(Date.parse(originalExpiresAt));
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, Date.parse(originalExpiresAt) - Date.now() + 25)));
+
+    const concurrent = await app.fetch(finalizeRequest("upl_near_expiry", "owner@example.com"));
+    expect(concurrent.status).toBe(409);
+    expect(await concurrent.json()).toMatchObject({ code: "upload_session_finalizing" });
+    expect(storage.deletedPrefixes).toHaveLength(0);
+    barrier.release();
+    expect((await claimant).status).toBe(200);
+    expect((await repository.listDeploymentVersions(user!.defaultNamespace, "near-expiry"))).toHaveLength(1);
+    expect((await app.fetch(finalizeRequest("upl_near_expiry", "owner@example.com"))).status).toBe(200);
+    expect(storage.getObjectCalls).toBe(1);
+    expect(storage.deletedPrefixes).toHaveLength(0);
+  });
+
   it("rejects a truthful hash and size when the declared text line count is false", async () => {
     const created = await createSession(app, "owner@example.com", [{ ...indexEntry, lineCount: 2 }]);
     const urls = await app.fetch(urlRequest(created.sessionId, ["index.html"], "owner@example.com"));
@@ -176,7 +219,12 @@ describe("direct upload sessions", () => {
       manifest: [indexEntry],
       expiresAt: new Date(Date.now() - 1_000).toISOString()
     });
-    expect((await repository.claimUploadSessionForFinalization("upl_crashed_complete", user!.id))?.outcome).toBe("claimed");
+    expect((await repository.transitionUploadSession({
+      sessionId: "upl_crashed_complete",
+      ownerUserId: user!.id,
+      expectedStatuses: ["pending"],
+      status: "finalizing"
+    })).status).toBe("finalizing");
     await repository.createDeploymentVersion({
       namespace: user!.defaultNamespace,
       slug: "crashed-complete",
@@ -206,7 +254,12 @@ describe("direct upload sessions", () => {
       manifest: [indexEntry],
       expiresAt: new Date(Date.now() - 1_000).toISOString()
     });
-    expect((await repository.claimUploadSessionForFinalization("upl_crashed_failed", user!.id))?.outcome).toBe("claimed");
+    expect((await repository.transitionUploadSession({
+      sessionId: "upl_crashed_failed",
+      ownerUserId: user!.id,
+      expectedStatuses: ["pending"],
+      status: "finalizing"
+    })).status).toBe("finalizing");
     await storage.putObject(
       storageKey(user!.defaultNamespace, "crashed-failed", "ver_crashed_failed", "index.html"),
       indexBytes,
@@ -313,7 +366,8 @@ class SessionTestRepo {
         const session = this.sessions.get(sessionId);
         return session?.ownerUserId === ownerUserId ? session : null;
       },
-      claimUploadSessionForFinalization: async (sessionId, ownerUserId) => this.claimUploadSessionForFinalization(sessionId, ownerUserId),
+      claimUploadSessionForFinalization: async (sessionId, ownerUserId, finalizationExpiresAt) =>
+        this.claimUploadSessionForFinalization(sessionId, ownerUserId, finalizationExpiresAt),
       transitionUploadSession: async (input) => this.transitionUploadSession(input),
       createDeploymentVersion: async (input) => this.createDeploymentVersion(input),
       getDeploymentVersion: async (namespace, slug, versionId) => {
@@ -374,11 +428,20 @@ class SessionTestRepo {
     return next;
   }
 
-  private claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): FinalizeUploadSessionClaim | null {
+  private claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): FinalizeUploadSessionClaim | null {
     const record = this.sessions.get(sessionId);
     if (!record || record.ownerUserId !== ownerUserId) return null;
     if (record.status === "pending") {
-      const claimed = { ...record, status: "finalizing" as const, updatedAt: new Date().toISOString() };
+      const claimed = {
+        ...record,
+        status: "finalizing" as const,
+        expiresAt: finalizationExpiresAt,
+        updatedAt: new Date().toISOString()
+      };
       this.sessions.set(sessionId, claimed);
       return { outcome: "claimed", session: claimed };
     }

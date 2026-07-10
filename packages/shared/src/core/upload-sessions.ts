@@ -6,6 +6,7 @@ import { fileManifestEntrySchema, type FileManifestEntry, type ValidationIssue, 
 import { DEFAULT_VALIDATION_LIMITS } from "./validation";
 
 export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
+export const UPLOAD_FINALIZATION_LEASE_MS = 60 * 60 * 1000;
 export const DIRECT_UPLOAD_URL_TTL_SECONDS = 5 * 60;
 export const DIRECT_UPLOAD_URL_BATCH_MAX = 100;
 export const DIRECT_UPLOAD_MANIFEST_MAX_BYTES = 1_000_000;

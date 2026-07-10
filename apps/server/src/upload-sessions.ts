@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import {
   DIRECT_UPLOAD_URL_TTL_SECONDS,
   DIRECT_UPLOAD_MANIFEST_MAX_BYTES,
+  UPLOAD_FINALIZATION_LEASE_MS,
   UPLOAD_SESSION_TTL_MS,
   isTextLike,
   lineCount,
@@ -141,7 +142,8 @@ export function registerUploadSessionRoutes(
       return c.json({ error: "Upload session expired." }, 410);
     }
 
-    const claim = await repo.claimUploadSessionForFinalization(session.id, auth.user.id);
+    const finalizationExpiresAt = new Date(Date.now() + UPLOAD_FINALIZATION_LEASE_MS).toISOString();
+    const claim = await repo.claimUploadSessionForFinalization(session.id, auth.user.id, finalizationExpiresAt);
     if (!claim) return c.json({ error: "Upload session not found." }, 404);
     if (claim.outcome === "completed" && claim.session.completedResult) {
       return c.json(sessionPublishResponse(claim.session, claim.session.completedResult));

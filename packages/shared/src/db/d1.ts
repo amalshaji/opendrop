@@ -511,10 +511,14 @@ export class D1OpenDropRepository implements OpenDropRepository {
     return row ? mapUploadSession(row) : null;
   }
 
-  async claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null> {
+  async claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): Promise<FinalizeUploadSessionClaim | null> {
     const result = await this.db
-      .prepare("update upload_sessions set status = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
-      .bind("finalizing", nowIso(), sessionId, ownerUserId, "pending")
+      .prepare("update upload_sessions set status = ?, expires_at = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
+      .bind("finalizing", finalizationExpiresAt, nowIso(), sessionId, ownerUserId, "pending")
       .run();
     const session = await this.getUploadSessionForOwner(sessionId, ownerUserId);
     return session ? uploadSessionClaimResult(session, Number(result.meta?.changes ?? 0) > 0) : null;

@@ -533,10 +533,14 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     return row ? mapUploadSession(row) : null;
   }
 
-  async claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null> {
+  async claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): Promise<FinalizeUploadSessionClaim | null> {
     const claimed = await this.orm
       .update(pgOpenDropSchema.uploadSessions)
-      .set({ status: "finalizing", updatedAt: nowIso() })
+      .set({ status: "finalizing", expiresAt: finalizationExpiresAt, updatedAt: nowIso() })
       .where(and(
         eq(pgOpenDropSchema.uploadSessions.id, sessionId),
         eq(pgOpenDropSchema.uploadSessions.ownerUserId, ownerUserId),

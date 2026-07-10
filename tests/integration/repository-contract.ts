@@ -222,11 +222,13 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   assert.equal(uploadSession.status, "pending");
   assert.equal(uploadSession.manifest[0]?.path, "index.html");
   assert.equal(await repo.getUploadSessionForOwner(uploadSession.id, existingEmailUser.id), null);
-  assert.equal(await repo.claimUploadSessionForFinalization(uploadSession.id, existingEmailUser.id), null);
-  const claim = await repo.claimUploadSessionForFinalization(uploadSession.id, user.id);
+  const finalizationExpiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  assert.equal(await repo.claimUploadSessionForFinalization(uploadSession.id, existingEmailUser.id, finalizationExpiresAt), null);
+  const claim = await repo.claimUploadSessionForFinalization(uploadSession.id, user.id, finalizationExpiresAt);
   assert.equal(claim?.outcome, "claimed");
   assert.equal(claim?.session.status, "finalizing");
-  assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id))?.outcome, "in_progress");
+  assert.equal(claim?.session.expiresAt, finalizationExpiresAt);
+  assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id, finalizationExpiresAt))?.outcome, "in_progress");
   const completedSession = await repo.transitionUploadSession({
     sessionId: uploadSession.id,
     ownerUserId: user.id,
@@ -245,7 +247,7 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   });
   assert.equal(repeatedCompletion.status, "completed");
   assert.equal(repeatedCompletion.failureReason, null);
-  assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id))?.outcome, "completed");
+  assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id, finalizationExpiresAt))?.outcome, "completed");
 
   const second = await repo.createDeploymentVersion({
     namespace: user.defaultNamespace,

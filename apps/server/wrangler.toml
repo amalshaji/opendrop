@@ -16,6 +16,9 @@ TRUSTED_PROXY_CIDRS = ""
 TRUSTED_PROXY_HOSTS = ""
 OPENDROP_TRUST_CLOUDFLARE_ACCESS = "false"
 
+[limits]
+subrequests = 25000
+
 [[d1_databases]]
 binding = "DB"
 database_name = "opendrop"

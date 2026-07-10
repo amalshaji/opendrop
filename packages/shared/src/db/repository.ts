@@ -95,7 +95,11 @@ export interface OpenDropRepository {
   createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion>;
   createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord>;
   getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null>;
-  claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null>;
+  claimUploadSessionForFinalization(
+    sessionId: string,
+    ownerUserId: string,
+    finalizationExpiresAt: string
+  ): Promise<FinalizeUploadSessionClaim | null>;
   transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord>;
   setDeploymentVisibility(namespace: string, slug: string, visibility: Visibility, userId: string): Promise<DeploymentFamilyRecord>;
   restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion>;
