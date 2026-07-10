@@ -21,6 +21,7 @@ import type {
   UploadSessionStatus
 } from "./types";
 import { parseJsonColumn } from "./mappers";
+import type { FinalizeUploadSessionClaim } from "./repository";
 
 interface DeploymentFamilyRow extends Omit<DeploymentFamilyRecord, "visibility"> {
   visibility: string;
@@ -123,6 +124,13 @@ export function mapUploadSession(row: UploadSessionRow): UploadSessionRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
+}
+
+export function uploadSessionClaimResult(session: UploadSessionRecord, claimed: boolean): FinalizeUploadSessionClaim {
+  if (claimed) return { outcome: "claimed", session };
+  if (session.status === "completed") return { outcome: "completed", session };
+  if (session.status === "failed") return { outcome: "failed", session };
+  return { outcome: "in_progress", session };
 }
 
 export function namespaceRole(role: string): "owner" | "publisher" {

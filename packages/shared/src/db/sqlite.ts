@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { nowIso, randomId, validateNamespace } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
+import type { CreateUploadSessionInput, CreateVersionInput, FinalizeUploadSessionClaim, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -28,7 +28,8 @@ import {
   mapDeploymentVersion,
   mapUploadSession,
   namespaceAccessRecords,
-  namespaceMemberRecord
+  namespaceMemberRecord,
+  uploadSessionClaimResult
 } from "./domain";
 import { decideDeviceTokenExchange } from "./device-authorization";
 import { runSqliteMigrations } from "./migrations";
@@ -554,6 +555,14 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.uploadSessions.id, sessionId), eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
       .get();
     return row ? mapUploadSession(row) : null;
+  }
+
+  async claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null> {
+    const result = this.db
+      .prepare("update upload_sessions set status = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
+      .run("finalizing", nowIso(), sessionId, ownerUserId, "pending");
+    const session = await this.getUploadSessionForOwner(sessionId, ownerUserId);
+    return session ? uploadSessionClaimResult(session, result.changes > 0) : null;
   }
 
   async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {

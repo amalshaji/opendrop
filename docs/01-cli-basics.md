@@ -42,7 +42,7 @@ opendrop upload ./site.zip --namespace amal --slug qa-review
 
 No namespace defaults to the user's default namespace. No slug creates a random slug. Upload output includes a latest URL and a version-specific URL.
 
-The CLI validates the manifest locally, requests short-lived exact-key upload URLs in batches, and uploads up to four files concurrently before OpenDrop finalizes the immutable version. A server that explicitly reports that direct uploads are unavailable falls back to the legacy multipart endpoint. Once a direct-upload session exists, errors are reported instead of replaying the upload through multipart.
+The CLI validates the manifest locally, requests short-lived exact-key upload URLs in batches, and uploads up to four files concurrently before OpenDrop finalizes the immutable version. A server that explicitly reports that direct uploads are unavailable, or that the serialized direct-upload manifest exceeds the 1,000,000-byte persistence cap, falls back to the legacy multipart endpoint. This cap does not reduce the existing file-count or artifact-byte limits. Once a direct-upload session exists, errors are reported instead of replaying the upload through multipart. Local validation details, including skipped files and warnings, are preserved in the publish result.
 
 Visibility options:
 

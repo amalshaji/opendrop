@@ -1,8 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createOpenDropApp } from "../../apps/server/src/app";
 import { loadAuthConfig } from "@opendrop/shared/auth";
-import { sha256Hex, type FileManifestEntry } from "@opendrop/shared/core";
-import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "@opendrop/shared/db/repository";
+import {
+  DIRECT_UPLOAD_MANIFEST_MAX_BYTES,
+  manifestHash,
+  serializedUploadManifestBytes,
+  sha256Hex,
+  storageKey,
+  type FileManifestEntry
+} from "@opendrop/shared/core";
+import type {
+  CreateUploadSessionInput,
+  CreateVersionInput,
+  FinalizeUploadSessionClaim,
+  OpenDropRepository,
+  TransitionUploadSessionInput
+} from "@opendrop/shared/db/repository";
 import type { DeploymentWithVersion, IdentityInput, UploadSessionRecord, UserRecord } from "@opendrop/shared/db/types";
 import type { ArtifactObject, ArtifactStorage, DirectUploadRequest, PresignedUploadTarget } from "@opendrop/shared/storage/interface";
 import type { BrowserAuth } from "../../apps/server/src/auth";
@@ -47,19 +60,50 @@ describe("direct upload sessions", () => {
     expect(target.headers["x-amz-meta-sha256"]).toBe(indexEntry.sha256);
     await storage.upload(target.url, indexBytes, target.headers);
 
-    const concurrent = await Promise.all([
-      app.fetch(finalizeRequest(created.sessionId, "owner@example.com")),
-      app.fetch(finalizeRequest(created.sessionId, "owner@example.com"))
-    ]);
-    expect(concurrent.map((response) => response.status)).toEqual([200, 200]);
-    for (const response of concurrent) {
-      expect((await response.json() as { version: { id: string } }).version.id).toBe(created.versionId);
-    }
+    const barrier = storage.blockNextRead();
+    const firstFinalize = app.fetch(finalizeRequest(created.sessionId, "owner@example.com"));
+    await barrier.started;
+    const concurrent = await app.fetch(finalizeRequest(created.sessionId, "owner@example.com"));
+    expect(concurrent.status).toBe(409);
+    expect(await concurrent.json()).toMatchObject({ code: "upload_session_finalizing" });
+    expect(storage.deletedPrefixes).toHaveLength(0);
+    barrier.release();
+    const first = await firstFinalize;
+    expect(first.status).toBe(200);
+    expect((await first.json() as { version: { id: string } }).version.id).toBe(created.versionId);
 
     const repeated = await app.fetch(finalizeRequest(created.sessionId, "owner@example.com"));
     expect(repeated.status).toBe(200);
     expect((await repeated.json() as { version: { id: string } }).version.id).toBe(created.versionId);
     expect((await repo.asRepository().listDeploymentVersions(created.namespace, created.slug))).toHaveLength(1);
+    expect(storage.getObjectCalls).toBe(1);
+    expect(storage.deletedPrefixes).toHaveLength(0);
+  });
+
+  it("rejects a truthful hash and size when the declared text line count is false", async () => {
+    const created = await createSession(app, "owner@example.com", [{ ...indexEntry, lineCount: 2 }]);
+    const urls = await app.fetch(urlRequest(created.sessionId, ["index.html"], "owner@example.com"));
+    const target = ((await urls.json()) as { uploads: Array<PresignedUploadTarget & { path: string }> }).uploads[0]!;
+    await storage.upload(target.url, indexBytes, target.headers);
+
+    const response = await app.fetch(finalizeRequest(created.sessionId, "owner@example.com"));
+    expect(response.status).toBe(422);
+    expect((await response.json() as { error: string }).error).toContain("line count does not match");
+    expect((await repo.asRepository().listDeploymentVersions(created.namespace, created.slug))).toHaveLength(0);
+  });
+
+  it("returns an explicit pre-session fallback code for a D1-unsafe serialized manifest", async () => {
+    const manifest = [indexEntry, ...Array.from({ length: 600 }, (_, index) => ({
+      path: `assets/${index}-${"x".repeat(1_700)}.bin`,
+      size: 0,
+      sha256: "c".repeat(64),
+      contentType: "application/octet-stream"
+    }))];
+    expect(serializedUploadManifestBytes(manifest)).toBeGreaterThan(DIRECT_UPLOAD_MANIFEST_MAX_BYTES);
+    const response = await app.fetch(sessionRequest("owner@example.com", { manifest }));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ code: "direct_upload_manifest_too_large" });
+    expect(repo.sessionCount).toBe(0);
   });
 
   it("deletes staged objects and marks the session failed when content is tampered", async () => {
@@ -114,6 +158,64 @@ describe("direct upload sessions", () => {
     const response = await app.fetch(urlRequest("upl_expired", ["index.html"], "owner@example.com"));
     expect(response.status).toBe(410);
     expect((await repository.getUploadSessionForOwner("upl_expired", user!.id))?.status).toBe("failed");
+  });
+
+  it("reconciles an expired finalizing session only when its preallocated version exists", async () => {
+    await app.fetch(sessionRequest("owner@example.com"));
+    const repository = repo.asRepository();
+    const user = await repository.getUserByIdentity("dev", "owner@example.com");
+    const hash = await manifestHash([indexEntry]);
+    await repository.createUploadSession({
+      id: "upl_crashed_complete",
+      ownerUserId: user!.id,
+      namespace: user!.defaultNamespace,
+      slug: "crashed-complete",
+      visibility: "public",
+      versionId: "ver_crashed_complete",
+      manifestHash: hash,
+      manifest: [indexEntry],
+      expiresAt: new Date(Date.now() - 1_000).toISOString()
+    });
+    expect((await repository.claimUploadSessionForFinalization("upl_crashed_complete", user!.id))?.outcome).toBe("claimed");
+    await repository.createDeploymentVersion({
+      namespace: user!.defaultNamespace,
+      slug: "crashed-complete",
+      versionId: "ver_crashed_complete",
+      ownerUserId: user!.id,
+      visibility: "public",
+      manifestHash: hash,
+      files: [{
+        ...indexEntry,
+        storageKey: storageKey(user!.defaultNamespace, "crashed-complete", "ver_crashed_complete", "index.html")
+      }]
+    });
+
+    const completed = await app.fetch(finalizeRequest("upl_crashed_complete", "owner@example.com"));
+    expect(completed.status).toBe(200);
+    expect((await repository.getUploadSessionForOwner("upl_crashed_complete", user!.id))?.status).toBe("completed");
+    expect(storage.getObjectCalls).toBe(0);
+
+    await repository.createUploadSession({
+      id: "upl_crashed_failed",
+      ownerUserId: user!.id,
+      namespace: user!.defaultNamespace,
+      slug: "crashed-failed",
+      visibility: "public",
+      versionId: "ver_crashed_failed",
+      manifestHash: hash,
+      manifest: [indexEntry],
+      expiresAt: new Date(Date.now() - 1_000).toISOString()
+    });
+    expect((await repository.claimUploadSessionForFinalization("upl_crashed_failed", user!.id))?.outcome).toBe("claimed");
+    await storage.putObject(
+      storageKey(user!.defaultNamespace, "crashed-failed", "ver_crashed_failed", "index.html"),
+      indexBytes,
+      indexEntry.contentType
+    );
+    const failed = await app.fetch(finalizeRequest("upl_crashed_failed", "owner@example.com"));
+    expect(failed.status).toBe(410);
+    expect((await repository.getUploadSessionForOwner("upl_crashed_failed", user!.id))?.status).toBe("failed");
+    expect(storage.objects.size).toBe(0);
   });
 });
 
@@ -191,6 +293,10 @@ class SessionTestRepo {
   private readonly sessions = new Map<string, UploadSessionRecord>();
   private readonly deployments = new Map<string, DeploymentWithVersion>();
 
+  get sessionCount(): number {
+    return this.sessions.size;
+  }
+
   asRepository(): OpenDropRepository {
     return {
       migrate: async () => undefined,
@@ -207,6 +313,7 @@ class SessionTestRepo {
         const session = this.sessions.get(sessionId);
         return session?.ownerUserId === ownerUserId ? session : null;
       },
+      claimUploadSessionForFinalization: async (sessionId, ownerUserId) => this.claimUploadSessionForFinalization(sessionId, ownerUserId),
       transitionUploadSession: async (input) => this.transitionUploadSession(input),
       createDeploymentVersion: async (input) => this.createDeploymentVersion(input),
       getDeploymentVersion: async (namespace, slug, versionId) => {
@@ -267,6 +374,19 @@ class SessionTestRepo {
     return next;
   }
 
+  private claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): FinalizeUploadSessionClaim | null {
+    const record = this.sessions.get(sessionId);
+    if (!record || record.ownerUserId !== ownerUserId) return null;
+    if (record.status === "pending") {
+      const claimed = { ...record, status: "finalizing" as const, updatedAt: new Date().toISOString() };
+      this.sessions.set(sessionId, claimed);
+      return { outcome: "claimed", session: claimed };
+    }
+    if (record.status === "completed") return { outcome: "completed", session: record };
+    if (record.status === "failed") return { outcome: "failed", session: record };
+    return { outcome: "in_progress", session: record };
+  }
+
   private createDeploymentVersion(input: CreateVersionInput): DeploymentWithVersion {
     const existing = this.deployments.get(`${input.namespace}/${input.slug}`);
     if (existing) throw new Error("Version already exists.");
@@ -302,6 +422,9 @@ class SessionTestRepo {
 class MemoryDirectStorage implements ArtifactStorage {
   readonly objects = new Map<string, { body: Uint8Array; contentType: string }>();
   readonly directUploadEnabled: boolean;
+  readonly deletedPrefixes: string[] = [];
+  getObjectCalls = 0;
+  private blockedRead?: { started: () => void; wait: Promise<void> };
 
   constructor(enabled = true) {
     this.directUploadEnabled = enabled;
@@ -312,11 +435,19 @@ class MemoryDirectStorage implements ArtifactStorage {
   }
 
   async getObject(key: string): Promise<ArtifactObject | null> {
+    this.getObjectCalls += 1;
+    if (this.blockedRead) {
+      const blocked = this.blockedRead;
+      this.blockedRead = undefined;
+      blocked.started();
+      await blocked.wait;
+    }
     const object = this.objects.get(key);
     return object ? { body: object.body, contentType: object.contentType, size: object.body.byteLength } : null;
   }
 
   async deletePrefix(prefix: string): Promise<void> {
+    this.deletedPrefixes.push(prefix);
     for (const key of this.objects.keys()) if (key.startsWith(prefix)) this.objects.delete(key);
   }
 
@@ -335,6 +466,15 @@ class MemoryDirectStorage implements ArtifactStorage {
   async upload(url: string, body: Uint8Array, headers: Record<string, string>) {
     const key = decodeURIComponent(new URL(url).pathname.slice(1));
     await this.putObject(key, body, headers["content-type"]!);
+  }
+
+  blockNextRead(): { started: Promise<void>; release: () => void } {
+    let signalStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    this.blockedRead = { started: signalStarted, wait };
+    return { started, release };
   }
 }
 

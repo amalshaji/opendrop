@@ -6,7 +6,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
+import type { CreateUploadSessionInput, CreateVersionInput, FinalizeUploadSessionClaim, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -29,7 +29,8 @@ import {
   mapDeploymentVersion,
   mapUploadSession,
   namespaceAccessRecords,
-  namespaceMemberRecord
+  namespaceMemberRecord,
+  uploadSessionClaimResult
 } from "./domain";
 import { decideDeviceTokenExchange } from "./device-authorization";
 import { sqliteOpenDropSchema } from "./schema";
@@ -508,6 +509,15 @@ export class D1OpenDropRepository implements OpenDropRepository {
       .where(and(eq(sqliteOpenDropSchema.uploadSessions.id, sessionId), eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
       .get();
     return row ? mapUploadSession(row) : null;
+  }
+
+  async claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null> {
+    const result = await this.db
+      .prepare("update upload_sessions set status = ?, updated_at = ? where id = ? and owner_user_id = ? and status = ?")
+      .bind("finalizing", nowIso(), sessionId, ownerUserId, "pending")
+      .run();
+    const session = await this.getUploadSessionForOwner(sessionId, ownerUserId);
+    return session ? uploadSessionClaimResult(session, Number(result.meta?.changes ?? 0) > 0) : null;
   }
 
   async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {

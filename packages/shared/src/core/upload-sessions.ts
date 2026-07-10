@@ -8,6 +8,8 @@ import { DEFAULT_VALIDATION_LIMITS } from "./validation";
 export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
 export const DIRECT_UPLOAD_URL_TTL_SECONDS = 5 * 60;
 export const DIRECT_UPLOAD_URL_BATCH_MAX = 100;
+export const DIRECT_UPLOAD_MANIFEST_MAX_BYTES = 1_000_000;
+export const DIRECT_UPLOAD_FALLBACK_CODES = ["direct_upload_unavailable", "direct_upload_manifest_too_large"] as const;
 
 const uploadSessionManifestEntrySchema = fileManifestEntrySchema
   .extend({
@@ -29,7 +31,11 @@ const uploadSessionManifestEntrySchema = fileManifestEntrySchema
     if (entry.contentType !== expectedContentType) {
       ctx.addIssue({ code: "custom", path: ["contentType"], message: `Content type must be ${expectedContentType}.` });
     }
-    if (!isTextLike(entry.path, entry.contentType) && entry.lineCount !== undefined) {
+    const textLike = isTextLike(entry.path, entry.contentType);
+    if (textLike && entry.lineCount === undefined) {
+      ctx.addIssue({ code: "custom", path: ["lineCount"], message: "Text files must declare a line count." });
+    }
+    if (!textLike && entry.lineCount !== undefined) {
       ctx.addIssue({ code: "custom", path: ["lineCount"], message: "Binary files cannot declare a line count." });
     }
   });
@@ -53,6 +59,9 @@ export const uploadSessionManifestSchema = z
     }
     if (totalBytes > DEFAULT_VALIDATION_LIMITS.maxTotalBytes) {
       ctx.addIssue({ code: "custom", message: `Upload exceeds ${DEFAULT_VALIDATION_LIMITS.maxTotalBytes} bytes.` });
+    }
+    if (serializedUploadManifestBytes(manifest) > DIRECT_UPLOAD_MANIFEST_MAX_BYTES) {
+      ctx.addIssue({ code: "custom", message: `Serialized manifest exceeds ${DIRECT_UPLOAD_MANIFEST_MAX_BYTES} bytes.` });
     }
   });
 
@@ -91,6 +100,21 @@ export const uploadSessionUrlsResponseSchema = z.object({
 
 export type UploadSessionCreateBody = z.infer<typeof uploadSessionCreateBodySchema>;
 export type DirectUploadTarget = z.infer<typeof directUploadTargetSchema>;
+
+export function serializedUploadManifestBytes(manifest: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(manifest)).byteLength;
+}
+
+export function isDirectUploadFallbackCode(code: unknown): boolean {
+  return typeof code === "string" && (DIRECT_UPLOAD_FALLBACK_CODES as readonly string[]).includes(code);
+}
+
+export function publishResultWithValidation<T extends Record<string, unknown>>(
+  result: T,
+  validation: ValidationResult
+): T & { validation: ValidationResult } {
+  return { ...result, validation };
+}
 
 export function validationResultForManifest(acceptedFiles: FileManifestEntry[]): ValidationResult {
   const issues: ValidationIssue[] = [];

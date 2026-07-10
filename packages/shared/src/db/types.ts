@@ -72,7 +72,7 @@ export interface DeploymentWithVersion {
   version: DeploymentVersionRecord;
 }
 
-export type UploadSessionStatus = "pending" | "completed" | "failed";
+export type UploadSessionStatus = "pending" | "finalizing" | "completed" | "failed";
 
 export interface UploadSessionRecord {
   id: string;

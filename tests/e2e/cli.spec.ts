@@ -142,14 +142,18 @@ test("cli login completes device flow and stores local config", async ({ request
   }
 });
 
-test("cli falls back to multipart only when session creation explicitly reports unavailable", async () => {
+test("cli falls back to multipart only for explicit pre-session capability responses", async () => {
   let sessionAttempts = 0;
   let multipartAttempts = 0;
   const server = createServer((request, response) => {
     if (request.method === "POST" && request.url === "/api/uploads/sessions") {
       sessionAttempts += 1;
-      response.writeHead(501, { "content-type": "application/json" });
-      response.end(JSON.stringify({ error: "disabled", code: "direct_upload_unavailable" }));
+      const manifestTooLarge = sessionAttempts === 2;
+      response.writeHead(manifestTooLarge ? 413 : 501, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        error: manifestTooLarge ? "manifest too large" : "disabled",
+        code: manifestTooLarge ? "direct_upload_manifest_too_large" : "direct_upload_unavailable"
+      }));
       return;
     }
     if (request.method === "POST" && request.url === "/api/uploads/publish") {
@@ -182,8 +186,12 @@ test("cli falls back to multipart only when session creation explicitly reports 
       env: { ...process.env, OPENDROP_TOKEN: "test-token" }
     });
     expect(result.stdout).toContain('"versionUrl": "/fallback/legacy?version=ver_legacy"');
-    expect(sessionAttempts).toBe(1);
-    expect(multipartAttempts).toBe(1);
+    const largeManifestFallback = await exec("bun", cliArgs("upload", site, "--server", fakeUrl, "--json"), {
+      env: { ...process.env, OPENDROP_TOKEN: "test-token" }
+    });
+    expect(largeManifestFallback.stdout).toContain('"versionUrl": "/fallback/legacy?version=ver_legacy"');
+    expect(sessionAttempts).toBe(2);
+    expect(multipartAttempts).toBe(2);
   } finally {
     await new Promise<void>((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }

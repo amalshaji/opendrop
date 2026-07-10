@@ -87,3 +87,5 @@ OPENDROP_TRUST_CLOUDFLARE_ACCESS = "true"
 ```
 
 Browser and CLI publishes use staged direct-to-R2 uploads when the S3 API settings are present, avoiding the Worker request body limit. Legacy multipart publishing remains available when direct signing is not configured. Each file remains capped at 25 MiB; multipart object upload for larger individual files is not implemented.
+
+D1 limits individual rows and strings to 2,000,000 bytes. OpenDrop conservatively caps the serialized direct-upload manifest at 1,000,000 UTF-8 bytes before creating a durable session; clients may use the legacy multipart endpoint for that explicit pre-session response. The normal 20,000-file and 90 MiB artifact limits are unchanged.

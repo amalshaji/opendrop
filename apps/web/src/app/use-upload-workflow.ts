@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   uploadMetadataSchema,
   validationResultSchema,
@@ -6,7 +6,7 @@ import {
   type Visibility
 } from "@opendrop/shared/core";
 import { validationMessage } from "@/app/format";
-import { filesFromDataTransfer, publishDirectUpload, uploadFormData, uploadPath } from "@/app/upload-files";
+import { filesFromDataTransfer, publishDirectUpload, uploadFormData, validateBrowserUpload } from "@/app/upload-files";
 import type { PublishResult, Session } from "@/app/types";
 
 interface UseUploadWorkflowOptions {
@@ -35,18 +35,6 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
     }
   }, [session]);
 
-  const formData = useMemo(() => {
-    const data = new FormData();
-    for (const file of files) {
-      const path = uploadPath(file);
-      data.append("files", file, path);
-    }
-    if (namespace.trim()) data.append("namespace", namespace);
-    if (slug.trim()) data.append("slug", slug);
-    data.append("visibility", visibility);
-    return data;
-  }, [files, namespace, slug, visibility]);
-
   useEffect(() => {
     if (files.length > 0) {
       void validate();
@@ -59,14 +47,13 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
 
   async function validate() {
     setStatus("Validating upload...");
-    const response = await fetch("/api/uploads/validate", { method: "POST", credentials: "include", body: formData });
-    const result = validationResultSchema.safeParse(await response.json());
+    const result = validationResultSchema.safeParse(await validateBrowserUpload(files));
     if (!result.success) {
       setStatus("Validation response was invalid.");
       return;
     }
     setValidation(result.data);
-    setStatus(response.ok ? "Ready to publish." : "Validation needs attention.");
+    setStatus(result.data.ok ? "Ready to publish." : "Validation needs attention.");
   }
 
   async function publishUpload() {

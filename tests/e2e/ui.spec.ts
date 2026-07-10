@@ -173,9 +173,9 @@ test("direct folder upload reports progress and explicit capability failure fall
   await page.route("**/api/uploads/sessions", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
-        status: 501,
+        status: 413,
         contentType: "application/json",
-        body: JSON.stringify({ error: "disabled", code: "direct_upload_unavailable" })
+        body: JSON.stringify({ error: "manifest too large", code: "direct_upload_manifest_too_large" })
       });
       return;
     }

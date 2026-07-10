@@ -1,11 +1,15 @@
 import type { Hono } from "hono";
 import {
   DIRECT_UPLOAD_URL_TTL_SECONDS,
+  DIRECT_UPLOAD_MANIFEST_MAX_BYTES,
   UPLOAD_SESSION_TTL_MS,
+  isTextLike,
+  lineCount,
   manifestHash,
   randomId,
   randomSlug,
   sha256Hex,
+  serializedUploadManifestBytes,
   storageKey,
   uploadSessionCreateBodySchema,
   uploadSessionParamsSchema,
@@ -37,6 +41,12 @@ export function registerUploadSessionRoutes(
       return directUploadUnavailable(c);
     }
     const rawBody = await c.req.json().catch(() => null);
+    if (serializedManifestTooLarge(rawBody)) {
+      return c.json({
+        error: `Direct upload manifest exceeds ${DIRECT_UPLOAD_MANIFEST_MAX_BYTES} serialized bytes.`,
+        code: "direct_upload_manifest_too_large"
+      }, 413);
+    }
     const body = uploadSessionCreateBodySchema.safeParse(rawBody);
     if (!body.success) return validationError(c, body.error);
     const namespace = body.data.namespace ?? auth.user.defaultNamespace;
@@ -76,7 +86,9 @@ export function registerUploadSessionRoutes(
     if (!session) return c.json({ error: "Upload session not found." }, 404);
     const unavailable = unavailableSessionResponse(c, session);
     if (unavailable) {
-      if (session.status === "pending" && sessionExpired(session)) await failAndClean(repo, storage, session, "Upload session expired.");
+      if (session.status === "pending" && sessionExpired(session)) {
+        await failSessionAndClean(repo, storage, session, ["pending"], "Upload session expired.");
+      }
       return unavailable;
     }
     if (!storage.directUploadEnabled || !storage.presignPutObject) {
@@ -113,20 +125,42 @@ export function registerUploadSessionRoutes(
     if (auth instanceof Response) return auth;
     const params = uploadSessionParamsSchema.safeParse(c.req.param());
     if (!params.success) return validationError(c, params.error);
-    const session = await repo.getUploadSessionForOwner(params.data.sessionId, auth.user.id);
+    let session = await repo.getUploadSessionForOwner(params.data.sessionId, auth.user.id);
     if (!session) return c.json({ error: "Upload session not found." }, 404);
     if (session.status === "completed" && session.completedResult) {
       return c.json(sessionPublishResponse(session, session.completedResult));
     }
-    const unavailable = unavailableSessionResponse(c, session);
-    if (unavailable) {
-      if (session.status === "pending" && sessionExpired(session)) await failAndClean(repo, storage, session, "Upload session expired.");
-      return unavailable;
+    if (session.status === "failed") {
+      return c.json({ error: session.failureReason ?? "Upload session failed." }, 409);
+    }
+    if (session.status === "finalizing") {
+      return reconcileOrConflict(c, repo, storage, session);
+    }
+    if (sessionExpired(session)) {
+      await failSessionAndClean(repo, storage, session, ["pending"], "Upload session expired.");
+      return c.json({ error: "Upload session expired." }, 410);
+    }
+
+    const claim = await repo.claimUploadSessionForFinalization(session.id, auth.user.id);
+    if (!claim) return c.json({ error: "Upload session not found." }, 404);
+    if (claim.outcome === "completed" && claim.session.completedResult) {
+      return c.json(sessionPublishResponse(claim.session, claim.session.completedResult));
+    }
+    if (claim.outcome === "failed") {
+      return c.json({ error: claim.session.failureReason ?? "Upload session failed." }, 409);
+    }
+    if (claim.outcome === "in_progress") {
+      return reconcileOrConflict(c, repo, storage, claim.session);
+    }
+    session = claim.session;
+    if (sessionExpired(session)) {
+      await failSessionAndClean(repo, storage, session, ["finalizing"], "Upload session expired.");
+      return c.json({ error: "Upload session expired." }, 410);
     }
 
     const mismatch = await verifyUploadedManifest(storage, session).catch(() => "Artifact storage verification failed.");
     if (mismatch) {
-      await failAndClean(repo, storage, session, mismatch);
+      await failSessionAndClean(repo, storage, session, ["finalizing"], mismatch);
       return c.json({ error: mismatch }, mismatch === "Artifact storage verification failed." ? 502 : 422);
     }
 
@@ -145,18 +179,20 @@ export function registerUploadSessionRoutes(
     };
     const deployment = await createDeploymentVersionIdempotently(repo, input).catch((error) => repositoryMutationError(c, error));
     if (deployment instanceof Response) {
-      await failAndClean(repo, storage, session, "Deployment version creation failed.");
+      await failSessionAndClean(repo, storage, session, ["finalizing"], "Deployment version creation failed.");
       return deployment;
     }
     const completed = await repo.transitionUploadSession({
       sessionId: session.id,
       ownerUserId: session.ownerUserId,
-      expectedStatuses: ["pending"],
+      expectedStatuses: ["finalizing"],
       status: "completed",
       completedResult: deployment
     });
-    const result = completed.completedResult ?? deployment;
-    return c.json(sessionPublishResponse(completed, result));
+    if (completed.status !== "completed" || !completed.completedResult) {
+      return c.json({ error: "Upload session finalization did not complete.", code: "upload_session_not_completed" }, 409);
+    }
+    return c.json(sessionPublishResponse(completed, completed.completedResult));
   });
 }
 
@@ -169,6 +205,8 @@ async function verifyUploadedManifest(storage: ArtifactStorage, session: UploadS
     const bytes = await objectBytes(object);
     if (bytes.byteLength !== file.size) return `Uploaded object size does not match: ${file.path}`;
     if ((await sha256Hex(bytes)) !== file.sha256) return `Uploaded object checksum does not match: ${file.path}`;
+    const actualLineCount = isTextLike(file.path, file.contentType) ? lineCount(bytes) : undefined;
+    if (actualLineCount !== file.lineCount) return `Uploaded object line count does not match: ${file.path}`;
   }
   return null;
 }
@@ -180,6 +218,10 @@ async function objectBytes(object: ArtifactObject): Promise<Uint8Array> {
 
 function unavailableSessionResponse(c: OpenDropContext, session: UploadSessionRecord): Response | null {
   if (session.status === "failed") return c.json({ error: session.failureReason ?? "Upload session failed." }, 409);
+  if (session.status === "completed") return c.json({ error: "Upload session is already completed." }, 409);
+  if (session.status === "finalizing") {
+    return c.json({ error: "Upload session finalization is already in progress.", code: "upload_session_finalizing" }, 409);
+  }
   if (sessionExpired(session)) return c.json({ error: "Upload session expired." }, 410);
   return null;
 }
@@ -188,20 +230,54 @@ function sessionExpired(session: UploadSessionRecord): boolean {
   return Date.parse(session.expiresAt) <= Date.now();
 }
 
-async function failAndClean(
+async function failSessionAndClean(
   repo: OpenDropRepository,
   storage: ArtifactStorage,
   session: UploadSessionRecord,
+  expectedStatuses: Array<"pending" | "finalizing">,
   reason: string
 ): Promise<void> {
-  await storage.deletePrefix(storageKey(session.namespace, session.slug, session.versionId, "")).catch(() => undefined);
-  await repo.transitionUploadSession({
+  const failed = await repo.transitionUploadSession({
     sessionId: session.id,
     ownerUserId: session.ownerUserId,
-    expectedStatuses: ["pending"],
+    expectedStatuses,
     status: "failed",
     failureReason: reason
-  }).catch(() => undefined);
+  }).catch(() => null);
+  if (failed?.status === "failed") {
+    await storage.deletePrefix(storageKey(session.namespace, session.slug, session.versionId, "")).catch(() => undefined);
+  }
+}
+
+async function reconcileOrConflict(
+  c: OpenDropContext,
+  repo: OpenDropRepository,
+  storage: ArtifactStorage,
+  session: UploadSessionRecord
+): Promise<Response> {
+  if (!sessionExpired(session)) {
+    return c.json({ error: "Upload session finalization is already in progress.", code: "upload_session_finalizing" }, 409);
+  }
+  const existing = await repo.getDeploymentVersion(session.namespace, session.slug, session.versionId);
+  if (
+    existing &&
+    existing.version.createdByUserId === session.ownerUserId &&
+    existing.version.manifestHash === session.manifestHash
+  ) {
+    const completed = await repo.transitionUploadSession({
+      sessionId: session.id,
+      ownerUserId: session.ownerUserId,
+      expectedStatuses: ["finalizing"],
+      status: "completed",
+      completedResult: existing
+    });
+    if (completed.status === "completed" && completed.completedResult) {
+      return c.json(sessionPublishResponse(completed, completed.completedResult));
+    }
+    return c.json({ error: "Upload session reconciliation did not complete." }, 409);
+  }
+  await failSessionAndClean(repo, storage, session, ["finalizing"], "Upload session expired while finalizing.");
+  return c.json({ error: "Upload session expired while finalizing." }, 410);
 }
 
 async function createDeploymentVersionIdempotently(
@@ -237,4 +313,9 @@ function sessionPublishResponse(session: UploadSessionRecord, deployment: Deploy
 
 function directUploadUnavailable(c: OpenDropContext) {
   return c.json({ error: "Direct upload sessions are not available.", code: "direct_upload_unavailable" }, 501);
+}
+
+function serializedManifestTooLarge(body: unknown): boolean {
+  if (!body || typeof body !== "object" || !("manifest" in body)) return false;
+  return serializedUploadManifestBytes((body as { manifest: unknown }).manifest) > DIRECT_UPLOAD_MANIFEST_MAX_BYTES;
 }

@@ -1,11 +1,14 @@
 import {
   filesFromZip,
+  isDirectUploadFallbackCode,
   mapWithConcurrency,
   normalizeUploadRoot,
   uploadSessionCreateResponseSchema,
   uploadSessionUrlsResponseSchema,
   validateUploadFiles,
+  publishResultWithValidation,
   type UploadFileLike,
+  type ValidationResult,
   type Visibility
 } from "@opendrop/shared/core";
 import type { WebkitDataTransferItem, WebkitDirectoryEntry, WebkitEntry, WebkitFileEntry } from "./types";
@@ -25,6 +28,10 @@ export type BrowserDirectUploadResult =
   | { kind: "published"; result: Record<string, unknown> }
   | { kind: "unavailable" };
 
+export async function validateBrowserUpload(files: File[]): Promise<ValidationResult> {
+  return validateUploadFiles(await prepareUploadFiles(files));
+}
+
 export async function publishDirectUpload(
   files: File[],
   metadata: { namespace?: string; slug?: string; visibility?: Visibility },
@@ -42,7 +49,7 @@ export async function publishDirectUpload(
   });
   if (!createResponse.ok) {
     const body = await createResponse.json().catch(() => null) as { code?: string; error?: string } | null;
-    if ([501, 503].includes(createResponse.status) && body?.code === "direct_upload_unavailable") {
+    if ([413, 501, 503].includes(createResponse.status) && isDirectUploadFallbackCode(body?.code)) {
       return { kind: "unavailable" };
     }
     throw new Error(body?.error ?? `Upload session creation failed (${createResponse.status}).`);
@@ -74,7 +81,10 @@ export async function publishDirectUpload(
     credentials: "include"
   });
   if (!finalizeResponse.ok) throw new Error(await responseError(finalizeResponse, "Upload finalization failed."));
-  return { kind: "published", result: await finalizeResponse.json() as Record<string, unknown> };
+  return {
+    kind: "published",
+    result: publishResultWithValidation(await finalizeResponse.json() as Record<string, unknown>, validation)
+  };
 }
 
 async function prepareUploadFiles(files: File[]): Promise<UploadFileLike[]> {

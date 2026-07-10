@@ -1,10 +1,12 @@
 import {
   filesFromZip,
+  isDirectUploadFallbackCode,
   mapWithConcurrency,
   normalizeUploadRoot,
   uploadSessionCreateResponseSchema,
   uploadSessionUrlsResponseSchema,
   validateUploadFiles,
+  publishResultWithValidation,
   type UploadFileLike,
   type Visibility
 } from "@opendrop/shared/core";
@@ -34,7 +36,7 @@ export async function publishDirectUpload(
   });
   if (!createResponse.ok) {
     const body = await createResponse.json().catch(() => null) as { code?: string } | null;
-    if ([501, 503].includes(createResponse.status) && body?.code === "direct_upload_unavailable") {
+    if ([413, 501, 503].includes(createResponse.status) && isDirectUploadFallbackCode(body?.code)) {
       return { kind: "unavailable" };
     }
     throw await responseError(createResponse, body);
@@ -64,7 +66,10 @@ export async function publishDirectUpload(
     server,
     method: "POST"
   });
-  return { kind: "published", result: await finalizeResponse.json() as Record<string, unknown> };
+  return {
+    kind: "published",
+    result: publishResultWithValidation(await finalizeResponse.json() as Record<string, unknown>, validation)
+  };
 }
 
 function prepareFiles(files: CliUploadFile[]): UploadFileLike[] {

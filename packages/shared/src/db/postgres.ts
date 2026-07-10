@@ -9,7 +9,7 @@ import {
   validateNamespace
 } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
+import type { CreateUploadSessionInput, CreateVersionInput, FinalizeUploadSessionClaim, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -32,7 +32,8 @@ import {
   mapDeploymentVersion,
   mapUploadSession,
   namespaceAccessRecords,
-  namespaceMemberRecord
+  namespaceMemberRecord,
+  uploadSessionClaimResult
 } from "./domain";
 import { decideDeviceTokenExchange } from "./device-authorization";
 import { runPostgresMigrations } from "./migrations";
@@ -530,6 +531,20 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       .where(and(eq(pgOpenDropSchema.uploadSessions.id, sessionId), eq(pgOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
       .limit(1);
     return row ? mapUploadSession(row) : null;
+  }
+
+  async claimUploadSessionForFinalization(sessionId: string, ownerUserId: string): Promise<FinalizeUploadSessionClaim | null> {
+    const claimed = await this.orm
+      .update(pgOpenDropSchema.uploadSessions)
+      .set({ status: "finalizing", updatedAt: nowIso() })
+      .where(and(
+        eq(pgOpenDropSchema.uploadSessions.id, sessionId),
+        eq(pgOpenDropSchema.uploadSessions.ownerUserId, ownerUserId),
+        eq(pgOpenDropSchema.uploadSessions.status, "pending")
+      ))
+      .returning({ id: pgOpenDropSchema.uploadSessions.id });
+    const session = await this.getUploadSessionForOwner(sessionId, ownerUserId);
+    return session ? uploadSessionClaimResult(session, claimed.length > 0) : null;
   }
 
   async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {
