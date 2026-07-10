@@ -690,6 +690,17 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
     return row ? mapDeploymentFile(row) : null;
   }
 
+  async getAnnotation(namespace: string, slug: string, annotationId: string): Promise<AnnotationRecord | null> {
+    const family = await this.getDeploymentFamily(namespace, slug);
+    if (!family) return null;
+    const row = this.orm
+      .select()
+      .from(sqliteOpenDropSchema.annotations)
+      .where(and(eq(sqliteOpenDropSchema.annotations.id, annotationId), eq(sqliteOpenDropSchema.annotations.familyId, family.id)))
+      .get();
+    return row ? mapDbAnnotation(row) : null;
+  }
+
   async createAnnotation(namespace: string, slug: string, input: AnnotationInput, userId: string): Promise<AnnotationRecord> {
     const deployment = await this.getDeploymentVersion(namespace, slug, input.versionId);
     if (!deployment) throw new Error("Deployment not found.");

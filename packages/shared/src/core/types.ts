@@ -77,6 +77,9 @@ const annotationPagePathSchema = z
 
 export const annotationShapeSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("page")
+  }),
+  z.object({
     type: z.literal("pin"),
     x: normalizedCoordinateSchema,
     y: normalizedCoordinateSchema,
@@ -133,10 +136,26 @@ export const annotationInputSchema = z.object({
   body: z.string().min(1).max(10_000),
   tags: annotationTagsSchema.default([]),
   shape: annotationShapeSchema,
-  viewport: annotationViewportSchema
+  viewport: annotationViewportSchema.nullable()
 });
 
 export type AnnotationInput = z.infer<typeof annotationInputSchema>;
+
+export const annotationPageNoteInputSchema = z.object({
+  pagePath: annotationPagePathSchema,
+  versionId: z.string().optional(),
+  body: z.string().min(1).max(10_000),
+  tags: annotationTagsSchema.default([])
+});
+
+export type AnnotationPageNoteInput = z.infer<typeof annotationPageNoteInputSchema>;
+
+export const annotationReplyInputSchema = z.object({
+  body: z.string().min(1).max(10_000),
+  tags: annotationTagsSchema.default([])
+});
+
+export type AnnotationReplyInput = z.infer<typeof annotationReplyInputSchema>;
 
 export const annotationResolveInputSchema = z.object({
   resolved: z.boolean()

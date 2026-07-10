@@ -19,7 +19,7 @@ Point comments store normalized coordinates plus viewport context. Text highligh
 
 ## CLI Access
 
-The CLI can fetch page content with annotations:
+The CLI can fetch page content and existing annotations:
 
 ```bash
 opendrop fetch amal/homepage --include html,annotations
@@ -27,6 +27,17 @@ opendrop annotations amal/homepage --path /
 ```
 
 This lets an agent reason over only the comments relevant to the current page, not the entire project.
+
+Authenticated agents can also create page-level notes, reply to existing annotations, and update resolved state:
+
+```bash
+opendrop annotation add amal/homepage --body "The CTA label is unclear." --path / --version-id ver_123 --tag copy --tag priority
+opendrop annotation reply amal/homepage ann_123 --body "Suggested replacement: Start free."
+opendrop annotation resolve amal/homepage ann_123
+opendrop annotation reopen amal/homepage ann_123
+```
+
+A version URL can replace `amal/homepage`, for example `https://drops.example.com/amal/homepage/versions/ver_123`. `annotation add` creates a first-class page-level note without synthetic coordinates or viewport data. Visual pins and text highlights remain browser-authored. `annotation reply` sends only the parent id and body; the server inherits the parent context.
 
 ## Payload Shape
 

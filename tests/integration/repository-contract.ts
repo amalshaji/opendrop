@@ -259,6 +259,8 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   );
   assert.equal(annotation.parentAnnotationId, null);
   assert.deepEqual(annotation.tags, ["review"]);
+  assert.equal((await repo.getAnnotation(user.defaultNamespace, slug, annotation.id))?.body, "Looks good");
+  assert.equal(await repo.getAnnotation(user.defaultNamespace, slug, "ann_missing"), null);
 
   const reply = await repo.createAnnotation(
     user.defaultNamespace,
