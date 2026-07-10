@@ -71,6 +71,7 @@ export interface OpenDropRepository {
   listDeploymentVersions(namespace: string, slug: string): Promise<DeploymentVersionRecord[]>;
   listDeploymentFiles(versionId: string): Promise<DeploymentFileRecord[]>;
   getDeploymentFile(versionId: string, path: string): Promise<DeploymentFileRecord | null>;
+  getAnnotation(namespace: string, slug: string, annotationId: string): Promise<AnnotationRecord | null>;
   createAnnotation(namespace: string, slug: string, input: AnnotationInput, userId: string): Promise<AnnotationRecord>;
   setAnnotationResolved(namespace: string, slug: string, annotationId: string, resolved: boolean, userId: string): Promise<AnnotationRecord>;
   listAnnotations(namespace: string, slug: string, versionId: string, pagePath?: string): Promise<AnnotationRecord[]>;

@@ -36,4 +36,4 @@ Owners can change visibility without creating a new artifact version.
 
 ## Annotations
 
-Annotations are stored per deployment version and page path. They include normalized coordinates or highlight rects, viewport context, body text, author, timestamps, nested replies, and resolved state.
+Annotations are stored per deployment version and page path. Visual annotations include normalized coordinates or highlight rects plus viewport context; page notes have no synthetic geometry. All annotations include body text, author, timestamps, nested replies, and resolved state.

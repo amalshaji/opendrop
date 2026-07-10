@@ -37,7 +37,7 @@ opendrop annotation resolve amal/homepage ann_123
 opendrop annotation reopen amal/homepage ann_123
 ```
 
-A version URL can replace `amal/homepage`, for example `https://drops.example.com/amal/homepage/versions/ver_123`. `annotation add` creates a page-level note at normalized coordinates `0.5, 0.5` with a deterministic 1280 x 720 viewport. Visual pins and text highlights remain browser-authored. `annotation reply` fetches the parent and inherits its version, page path, shape, and viewport.
+A version URL can replace `amal/homepage`, for example `https://drops.example.com/amal/homepage/versions/ver_123`. `annotation add` creates a first-class page-level note without synthetic coordinates or viewport data. Visual pins and text highlights remain browser-authored. `annotation reply` sends only the parent id and body; the server inherits the parent context.
 
 ## Payload Shape
 

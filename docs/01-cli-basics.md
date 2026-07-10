@@ -70,7 +70,7 @@ opendrop annotation resolve amal/homepage ann_123
 opendrop annotation reopen amal/homepage ann_123
 ```
 
-`annotation add` creates a page-level note at the center of a deterministic 1280 x 720 viewport. Use the browser review room to author visual pins and highlights. Replies inherit the parent annotation's version, page path, shape, and viewport.
+`annotation add` creates a page-level note without synthetic browser coordinates. Use the browser review room to author visual pins and highlights. The server attaches replies to the parent annotation and inherits its version and page context.
 
 ## Namespaces
 

@@ -25,11 +25,11 @@ opendrop annotation resolve amal/homepage ann_123
 opendrop annotation reopen amal/homepage ann_123
 ```
 
-Version URLs are accepted wherever `amal/homepage` appears. A reply inherits the parent's version, page path, shape, and viewport.
+Version URLs are accepted wherever `amal/homepage` appears. The server resolves the parent and inherits its version and page context.
 
 ## Page-Level Note Payload
 
-`annotation add` validates and sends this shape. The coordinates and viewport are deterministic; create visual pins and highlights in the browser review room instead.
+`annotation add` sends a first-class page note; create visual pins and highlights in the browser review room instead.
 
 ```json
 {
@@ -37,7 +37,7 @@ Version URLs are accepted wherever `amal/homepage` appears. A reply inherits the
   "versionId": "ver_123",
   "body": "The hero button wraps on mobile.",
   "tags": ["mobile", "layout"],
-  "shape": { "type": "note", "x": 0.5, "y": 0.5 },
-  "viewport": { "width": 1280, "height": 720, "scrollX": 0, "scrollY": 0 }
+  "shape": { "type": "page" },
+  "viewport": null
 }
 ```

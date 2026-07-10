@@ -3,12 +3,7 @@ import { Command } from "commander";
 import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import {
-  annotationIdParamSchema,
-  annotationInputSchema,
-  annotationQuerySchema,
-  annotationResolveInputSchema,
   deploymentRefInputSchema,
-  deploymentTargetSchema,
   deviceCodeResponseSchema,
   deviceCodeBodySchema,
   deviceTokenBodySchema,
@@ -23,6 +18,8 @@ import {
 } from "@opendrop/shared/core";
 import { z } from "zod";
 import { readCliConfig, resolveDeploymentUrl, resolveServer, setConfigValue, writeCliConfig } from "@/config";
+import { parseDeploymentTarget, searchParams, validationMessage } from "@/command-helpers";
+import { registerAnnotationCommands } from "@/commands/annotation";
 import { collectUploadFiles } from "@/files";
 import { apiFetch } from "@/http";
 
@@ -45,27 +42,6 @@ const fetchOptionsSchema = serverOptionSchema.extend({
   path: z.string().min(1).default("/"),
   versionId: z.string().optional(),
   include: z.string().default("html,annotations")
-});
-const annotationsOptionsSchema = serverOptionSchema.extend({
-  path: z.string().optional(),
-  versionId: z.string().optional()
-});
-const annotationAddOptionsSchema = serverOptionSchema.extend({
-  body: z.string().min(1),
-  path: z.string().min(1).default("/"),
-  versionId: z.string().optional(),
-  tag: z.array(z.string()).default([])
-});
-const annotationReplyOptionsSchema = serverOptionSchema.extend({
-  body: z.string().min(1)
-});
-const annotationListResponseSchema = z.object({
-  annotations: z.array(
-    annotationInputSchema.pick({ pagePath: true, shape: true, viewport: true }).extend({
-      id: z.string().min(1),
-      versionId: z.string().min(1)
-    })
-  )
 });
 const configCommandSchema = z
   .object({
@@ -312,118 +288,7 @@ program
     console.log(JSON.stringify(output, null, 2));
   });
 
-program
-  .command("annotations")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .option("--server <url>", "OpenDrop server URL")
-  .option("--path <path>", "Page path")
-  .option("--version-id <versionId>", "Version id")
-  .action(async (target, options) => {
-    const parsedOptions = annotationsOptionsSchema.safeParse(options);
-    if (!parsedOptions.success) throw new Error(validationMessage(parsedOptions.error));
-    const { namespace, slug, versionId } = parseDeploymentTarget(target);
-    const query = annotationQuerySchema.safeParse({ path: parsedOptions.data.path, versionId: parsedOptions.data.versionId ?? versionId });
-    if (!query.success) throw new Error(validationMessage(query.error));
-    const params = searchParams(query.data);
-    const response = await apiFetch(`/api/deployments/${namespace}/${slug}/annotations?${params}`, { server: parsedOptions.data.server });
-    console.log(JSON.stringify(await response.json(), null, 2));
-  });
-
-const annotationCommand = program.command("annotation").description("Create and manage annotations");
-
-annotationCommand
-  .command("add")
-  .description("Add a page-level note")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .requiredOption("--body <text>", "Annotation body")
-  .option("--server <url>", "OpenDrop server URL")
-  .option("--path <path>", "Page path", "/")
-  .option("--version-id <versionId>", "Version id")
-  .option("--tag <tag>", "Annotation tag (repeatable)", (tag, tags: string[]) => [...tags, tag], [])
-  .action(async (target, options) => {
-    const parsedOptions = annotationAddOptionsSchema.safeParse(options);
-    if (!parsedOptions.success) throw new Error(validationMessage(parsedOptions.error));
-    const { namespace, slug, versionId } = parseDeploymentTarget(target);
-    const body = annotationInputSchema.safeParse({
-      pagePath: parsedOptions.data.path,
-      versionId: parsedOptions.data.versionId ?? versionId,
-      body: parsedOptions.data.body,
-      tags: parsedOptions.data.tag,
-      shape: { type: "note", x: 0.5, y: 0.5 },
-      viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0 }
-    });
-    if (!body.success) throw new Error(validationMessage(body.error));
-    const response = await apiFetch(`/api/deployments/${namespace}/${slug}/annotations`, {
-      server: parsedOptions.data.server,
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body.data)
-    });
-    console.log(JSON.stringify(await response.json(), null, 2));
-  });
-
-annotationCommand
-  .command("reply")
-  .description("Reply to an annotation")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .argument("<annotation-id>", "Parent annotation id")
-  .requiredOption("--body <text>", "Reply body")
-  .option("--server <url>", "OpenDrop server URL")
-  .action(async (target, annotationId, options) => {
-    const parsedOptions = annotationReplyOptionsSchema.safeParse(options);
-    if (!parsedOptions.success) throw new Error(validationMessage(parsedOptions.error));
-    const parsedAnnotationId = annotationIdParamSchema.safeParse({ annotationId });
-    if (!parsedAnnotationId.success) throw new Error(validationMessage(parsedAnnotationId.error));
-    const { namespace, slug, versionId } = parseDeploymentTarget(target);
-    const query = annotationQuerySchema.safeParse({ versionId });
-    if (!query.success) throw new Error(validationMessage(query.error));
-    const params = searchParams(query.data);
-    const annotationsResponse = await apiFetch(`/api/deployments/${namespace}/${slug}/annotations?${params}`, {
-      server: parsedOptions.data.server
-    });
-    const annotations = annotationListResponseSchema.safeParse(await annotationsResponse.json());
-    if (!annotations.success) throw new Error("OpenDrop returned an invalid annotations response.");
-    const parent = annotations.data.annotations.find((annotation) => annotation.id === parsedAnnotationId.data.annotationId);
-    if (!parent) {
-      throw new Error(`Annotation ${parsedAnnotationId.data.annotationId} was not found for ${namespace}/${slug}.`);
-    }
-    const body = annotationInputSchema.safeParse({
-      pagePath: parent.pagePath,
-      versionId: parent.versionId,
-      parentAnnotationId: parent.id,
-      body: parsedOptions.data.body,
-      shape: parent.shape,
-      viewport: parent.viewport
-    });
-    if (!body.success) throw new Error(validationMessage(body.error));
-    const response = await apiFetch(`/api/deployments/${namespace}/${slug}/annotations`, {
-      server: parsedOptions.data.server,
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body.data)
-    });
-    console.log(JSON.stringify(await response.json(), null, 2));
-  });
-
-annotationCommand
-  .command("resolve")
-  .description("Resolve an annotation")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .argument("<annotation-id>", "Annotation id")
-  .option("--server <url>", "OpenDrop server URL")
-  .action(async (target, annotationId, options) => {
-    await setAnnotationResolved(target, annotationId, options, true);
-  });
-
-annotationCommand
-  .command("reopen")
-  .description("Reopen an annotation")
-  .argument("<url-or-ref>", "Preview URL or namespace/slug")
-  .argument("<annotation-id>", "Annotation id")
-  .option("--server <url>", "OpenDrop server URL")
-  .action(async (target, annotationId, options) => {
-    await setAnnotationResolved(target, annotationId, options, false);
-  });
+registerAnnotationCommands(program);
 
 program.parseAsync().catch((error) => {
   console.error(error.message);
@@ -469,57 +334,12 @@ function parseDeploymentRef(ref: string): { namespace: string; slug: string } {
   return parsed.data;
 }
 
-function parseDeploymentTarget(target: string): { namespace: string; slug: string; versionId?: string } {
-  const parsed = deploymentTargetSchema.safeParse(target);
-  if (!parsed.success) throw new Error("Expected namespace/slug or preview URL. " + validationMessage(parsed.error));
-  return parsed.data;
-}
-
 function parseInclude(value: unknown): Array<"html" | "manifest" | "annotations"> {
   const parsed = fetchIncludeSchema.safeParse(value);
   if (!parsed.success) throw new Error(validationMessage(parsed.error));
   return parsed.data;
 }
 
-async function setAnnotationResolved(target: string, annotationId: string, options: unknown, resolved: boolean) {
-  const parsedOptions = serverOptionSchema.safeParse(options);
-  if (!parsedOptions.success) throw new Error(validationMessage(parsedOptions.error));
-  const parsedAnnotationId = annotationIdParamSchema.safeParse({ annotationId });
-  if (!parsedAnnotationId.success) throw new Error(validationMessage(parsedAnnotationId.error));
-  const { namespace, slug } = parseDeploymentTarget(target);
-  const body = annotationResolveInputSchema.safeParse({ resolved });
-  if (!body.success) throw new Error(validationMessage(body.error));
-  const response = await apiFetch(
-    `/api/deployments/${namespace}/${slug}/annotations/${parsedAnnotationId.data.annotationId}`,
-    {
-      server: parsedOptions.data.server,
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body.data)
-    }
-  );
-  console.log(JSON.stringify(await response.json(), null, 2));
-}
-
-function searchParams(values: Record<string, unknown>): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(values)) {
-    if (typeof value === "string") params.set(key, value);
-  }
-  return params;
-}
-
 function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
-function validationMessage(error: unknown): string {
-  const issues = typeof error === "object" && error !== null && "issues" in error ? (error as { issues?: unknown }).issues : null;
-  if (!Array.isArray(issues)) return String(error);
-  return issues
-    .map((issue) => {
-      const item = issue as { path?: Array<string | number>; message?: string };
-      return `${item.path?.join(".") || "value"}: ${item.message ?? "Invalid value."}`;
-    })
-    .join("; ");
 }

@@ -51,7 +51,7 @@ export function mapAnnotation(row: any): AnnotationRecord {
     body: row.body,
     tags: parseJsonColumn(annotationTagsSchema, row.tags_json),
     shape: parseJsonColumn(annotationShapeSchema, row.shape_json),
-    viewport: parseJsonColumn(annotationViewportSchema, row.viewport_json),
+    viewport: parseJsonColumn(annotationViewportSchema.nullable(), row.viewport_json),
     resolvedAt: row.resolved_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at

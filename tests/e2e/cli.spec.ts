@@ -87,7 +87,8 @@ test("cli uploads and fetches a page", async ({ request }) => {
     pagePath: "/",
     body: "CLI-visible annotation",
     tags: ["cli", "agent"],
-    shape: { type: "note", x: 0.5, y: 0.5 }
+    shape: { type: "page" },
+    viewport: null
   });
 
   const reply = await exec(

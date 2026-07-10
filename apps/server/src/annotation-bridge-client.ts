@@ -30,7 +30,7 @@ interface TextAnchor {
 type BridgeAnchor = ElementAnchor | TextAnchor;
 
 interface BridgeShape {
-  type?: "pin" | "note" | "highlight" | "region" | "freehand";
+  type?: "page" | "pin" | "note" | "highlight" | "region" | "freehand";
   x?: number;
   y?: number;
   width?: number;
