@@ -1,4 +1,5 @@
-import type { ArtifactObject, ArtifactStorage } from "./interface";
+import type { ArtifactObject, ArtifactStorage, DirectUploadRequest, PresignedUploadTarget } from "./interface";
+import { S3DirectUploadPresigner, type S3DirectUploadPresignerConfig } from "./presigner";
 
 export interface R2ObjectBodyLike {
   body: ReadableStream<Uint8Array>;
@@ -15,8 +16,31 @@ export interface R2BucketLike {
   delete(keys: string[]): Promise<void>;
 }
 
+export interface R2DirectUploadConfig {
+  accountId: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
 export class R2ArtifactStorage implements ArtifactStorage {
-  constructor(private bucket: R2BucketLike) {}
+  readonly directUploadEnabled: boolean;
+  private readonly presigner?: S3DirectUploadPresigner;
+
+  constructor(private bucket: R2BucketLike, directUpload?: R2DirectUploadConfig) {
+    this.directUploadEnabled = Boolean(directUpload);
+    if (directUpload) {
+      const config: S3DirectUploadPresignerConfig = {
+        bucket: directUpload.bucket,
+        endpoint: `https://${directUpload.accountId}.r2.cloudflarestorage.com`,
+        region: "auto",
+        accessKeyId: directUpload.accessKeyId,
+        secretAccessKey: directUpload.secretAccessKey,
+        forcePathStyle: true
+      };
+      this.presigner = new S3DirectUploadPresigner(config);
+    }
+  }
 
   async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
     await this.bucket.put(key, body, {
@@ -47,5 +71,10 @@ export class R2ArtifactStorage implements ArtifactStorage {
       cursor = listed.cursor;
       if (!listed.truncated) break;
     } while (cursor);
+  }
+
+  async presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget> {
+    if (!this.presigner) throw new Error("Direct upload signing is not configured for R2.");
+    return this.presigner.presignPutObject(request);
   }
 }

@@ -22,6 +22,7 @@ import { z } from "zod";
 import { readCliConfig, resolveDeploymentUrl, resolveServer, setConfigValue, writeCliConfig } from "@/config";
 import { collectUploadFiles } from "@/files";
 import { apiFetch } from "@/http";
+import { publishDirectUpload } from "@/upload-session";
 
 const program = new Command();
 const loginOptionsSchema = z.object({
@@ -233,19 +234,10 @@ program
     });
     if (!metadata.success) throw new Error(validationMessage(metadata.error));
     const files = await collectUploadFiles(parsedPath.data);
-    const form = new FormData();
-    for (const file of files) {
-      form.append("files", new Blob([arrayBufferFromBytes(file.bytes)], { type: file.type }), file.path);
-    }
-    if (metadata.data.namespace) form.append("namespace", metadata.data.namespace);
-    if (metadata.data.slug) form.append("slug", metadata.data.slug);
-    if (metadata.data.visibility) form.append("visibility", metadata.data.visibility);
-    const response = await apiFetch("/api/uploads/publish", {
-      server: parsedOptions.data.server,
-      method: "POST",
-      body: form
-    });
-    const result = await response.json();
+    const direct = await publishDirectUpload(files, metadata.data, parsedOptions.data.server);
+    const result = direct.kind === "published"
+      ? direct.result
+      : await publishMultipart(files, metadata.data, parsedOptions.data.server);
     if (parsedOptions.data.json) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -375,6 +367,22 @@ function searchParams(values: Record<string, unknown>): URLSearchParams {
 
 function arrayBufferFromBytes(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+async function publishMultipart(
+  files: Awaited<ReturnType<typeof collectUploadFiles>>,
+  metadata: { namespace?: string; slug?: string; visibility?: "public" | "private" },
+  server?: string
+) {
+  const form = new FormData();
+  for (const file of files) {
+    form.append("files", new Blob([arrayBufferFromBytes(file.bytes)], { type: file.type }), file.path);
+  }
+  if (metadata.namespace) form.append("namespace", metadata.namespace);
+  if (metadata.slug) form.append("slug", metadata.slug);
+  if (metadata.visibility) form.append("visibility", metadata.visibility);
+  const response = await apiFetch("/api/uploads/publish", { server, method: "POST", body: form });
+  return response.json() as Promise<Record<string, unknown>>;
 }
 
 function validationMessage(error: unknown): string {

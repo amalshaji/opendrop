@@ -6,7 +6,7 @@ import {
   type Visibility
 } from "@opendrop/shared/core";
 import { validationMessage } from "@/app/format";
-import { filesFromDataTransfer, uploadFormData, uploadPath } from "@/app/upload-files";
+import { filesFromDataTransfer, publishDirectUpload, uploadFormData, uploadPath } from "@/app/upload-files";
 import type { PublishResult, Session } from "@/app/types";
 
 interface UseUploadWorkflowOptions {
@@ -80,17 +80,33 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
       return;
     }
     setIsPublishing(true);
-    setStatus("Publishing version...");
+    setStatus("Preparing upload...");
     try {
-      const response = await fetch("/api/uploads/publish", { method: "POST", credentials: "include", body: uploadFormData(files, metadata.data) });
-      const result = await response.json();
-      if (!response.ok) {
-        setStatus(result.error || "Publish failed.");
-        return;
+      const direct = await publishDirectUpload(files, metadata.data, (completed, total) => {
+        setStatus(`Uploading ${completed} of ${total} files...`);
+      });
+      let result: Record<string, unknown>;
+      if (direct.kind === "unavailable") {
+        setStatus("Direct upload unavailable. Publishing version...");
+        const response = await fetch("/api/uploads/publish", {
+          method: "POST",
+          credentials: "include",
+          body: uploadFormData(files, metadata.data)
+        });
+        result = await response.json() as Record<string, unknown>;
+        if (!response.ok) {
+          setStatus(typeof result.error === "string" ? result.error : "Publish failed.");
+          return;
+        }
+      } else {
+        setStatus("Finalizing version...");
+        result = direct.result;
       }
-      setLastPublished(result);
+      setLastPublished(result as PublishResult);
       setStatus("Published.");
-      await onPublished(result);
+      await onPublished(result as PublishResult);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Publish failed.");
     } finally {
       setIsPublishing(false);
     }

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { execFile, spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -138,6 +139,53 @@ test("cli login completes device flow and stores local config", async ({ request
     expect(whoami.stdout).toContain("\"email\": \"device-cli@example.com\"");
   } finally {
     if (child.exitCode === null) child.kill();
+  }
+});
+
+test("cli falls back to multipart only when session creation explicitly reports unavailable", async () => {
+  let sessionAttempts = 0;
+  let multipartAttempts = 0;
+  const server = createServer((request, response) => {
+    if (request.method === "POST" && request.url === "/api/uploads/sessions") {
+      sessionAttempts += 1;
+      response.writeHead(501, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "disabled", code: "direct_upload_unavailable" }));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/uploads/publish") {
+      multipartAttempts += 1;
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          namespace: "fallback",
+          slug: "legacy",
+          visibility: "public",
+          url: "/fallback/legacy",
+          versionUrl: "/fallback/legacy?version=ver_legacy",
+          family: {},
+          version: { id: "ver_legacy" }
+        }));
+      });
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Fake server did not bind a TCP port.");
+    const fakeUrl = `http://127.0.0.1:${address.port}`;
+    const site = resolve("tests/e2e/fixtures/valid-site");
+    const result = await exec("bun", cliArgs("upload", site, "--server", fakeUrl, "--json"), {
+      env: { ...process.env, OPENDROP_TOKEN: "test-token" }
+    });
+    expect(result.stdout).toContain('"versionUrl": "/fallback/legacy?version=ver_legacy"');
+    expect(sessionAttempts).toBe(1);
+    expect(multipartAttempts).toBe(1);
+  } finally {
+    await new Promise<void>((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }
 });
 

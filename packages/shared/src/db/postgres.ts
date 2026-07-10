@@ -9,7 +9,7 @@ import {
   validateNamespace
 } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateVersionInput, OpenDropRepository } from "./repository";
+import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -20,6 +20,7 @@ import type {
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
+  UploadSessionRecord,
   UserRecord
 } from "./types";
 import {
@@ -29,6 +30,7 @@ import {
   mapDeploymentFamily,
   mapDeploymentFile,
   mapDeploymentVersion,
+  mapUploadSession,
   namespaceAccessRecords,
   namespaceMemberRecord
 } from "./domain";
@@ -496,6 +498,58 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       family: mapDeploymentFamily(row.family),
       version: mapDeploymentVersion(row.version)
     }));
+  }
+
+  async createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord> {
+    const now = nowIso();
+    await this.orm.insert(pgOpenDropSchema.uploadSessions).values({
+      id: input.id,
+      ownerUserId: input.ownerUserId,
+      namespaceName: input.namespace,
+      slug: input.slug,
+      visibility: input.visibility,
+      versionId: input.versionId,
+      manifestHash: input.manifestHash,
+      manifestJson: JSON.stringify(input.manifest),
+      status: "pending",
+      resultJson: null,
+      failureReason: null,
+      expiresAt: input.expiresAt,
+      createdAt: now,
+      updatedAt: now
+    });
+    const record = await this.getUploadSessionForOwner(input.id, input.ownerUserId);
+    if (!record) throw new Error("Upload session could not be created.");
+    return record;
+  }
+
+  async getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null> {
+    const [row] = await this.orm
+      .select()
+      .from(pgOpenDropSchema.uploadSessions)
+      .where(and(eq(pgOpenDropSchema.uploadSessions.id, sessionId), eq(pgOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
+      .limit(1);
+    return row ? mapUploadSession(row) : null;
+  }
+
+  async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {
+    if (input.expectedStatuses.length === 0) throw new Error("Expected upload session statuses are required.");
+    await this.orm
+      .update(pgOpenDropSchema.uploadSessions)
+      .set({
+        status: input.status,
+        resultJson: input.completedResult ? JSON.stringify(input.completedResult) : null,
+        failureReason: input.failureReason ?? null,
+        updatedAt: nowIso()
+      })
+      .where(and(
+        eq(pgOpenDropSchema.uploadSessions.id, input.sessionId),
+        eq(pgOpenDropSchema.uploadSessions.ownerUserId, input.ownerUserId),
+        inArray(pgOpenDropSchema.uploadSessions.status, input.expectedStatuses)
+      ));
+    const record = await this.getUploadSessionForOwner(input.sessionId, input.ownerUserId);
+    if (!record) throw new Error("Upload session not found.");
+    return record;
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {

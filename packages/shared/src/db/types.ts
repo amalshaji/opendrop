@@ -72,6 +72,25 @@ export interface DeploymentWithVersion {
   version: DeploymentVersionRecord;
 }
 
+export type UploadSessionStatus = "pending" | "completed" | "failed";
+
+export interface UploadSessionRecord {
+  id: string;
+  ownerUserId: string;
+  namespace: string;
+  slug: string;
+  visibility: Visibility;
+  versionId: string;
+  manifestHash: string;
+  manifest: FileManifestEntry[];
+  status: UploadSessionStatus;
+  completedResult: DeploymentWithVersion | null;
+  failureReason: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AnnotationRecord {
   id: string;
   familyId: string;

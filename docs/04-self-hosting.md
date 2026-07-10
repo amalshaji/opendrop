@@ -36,11 +36,16 @@ OPENDROP_DB_DRIVER=sqlite
 SQLITE_PATH=/data/opendrop.sqlite
 OPENDROP_STORAGE_DRIVER=s3
 S3_ENDPOINT=http://minio:9000
+S3_PRESIGN_ENDPOINT=http://localhost:9000
 S3_BUCKET=opendrop
 S3_ACCESS_KEY_ID=opendrop
 S3_SECRET_ACCESS_KEY=opendrop-secret
 S3_FORCE_PATH_STYLE=true
 ```
+
+`S3_ENDPOINT` is the server's storage endpoint. `S3_PRESIGN_ENDPOINT` is optional and defaults to it; set it only when browser and CLI clients need a different public S3 API address, such as a MinIO container that the server reaches at `http://minio:9000` but clients reach at `http://localhost:9000`. It is used only for signing exact object-key PUT URLs and is never sent as a general proxy target.
+
+Configure the S3-compatible bucket's CORS policy for the OpenDrop app origin. Allow `PUT` without credentials and allow the `content-type`, `cache-control`, `if-none-match`, and `x-amz-meta-sha256` request headers. Do not use a wildcard origin together with credentialed requests. Direct-upload URLs are short-lived bearer credentials: do not log or persist them.
 
 ## Production Notes
 
@@ -51,6 +56,7 @@ S3_FORCE_PATH_STYLE=true
 - Use OAuth or trusted-header auth instead of dev auth.
 - Persist the SQLite path or PostgreSQL database and object storage bucket.
 - Strip identity headers at the reverse proxy before injecting trusted headers.
+- Keep the S3 API endpoint behind TLS in production and restrict CORS to the OpenDrop app origin.
 
 ## PostgreSQL Mode
 

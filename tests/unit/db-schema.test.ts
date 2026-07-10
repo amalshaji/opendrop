@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pgOpenDropSchema, sqliteOpenDropSchema } from "@opendrop/shared/db/schema";
 
@@ -14,14 +14,19 @@ const expectedTables = [
   "namespace_members",
   "namespaces",
   "session",
+  "upload_sessions",
   "user",
   "users",
   "verification"
 ];
 
 describe("drizzle schema", () => {
-  it("covers every table created by the initial migration", () => {
-    const migration = readFileSync("packages/shared/migrations/0001_initial.sql", "utf8");
+  it("covers every table created by the migrations", () => {
+    const migration = readdirSync("packages/shared/migrations")
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .map((name) => readFileSync(`packages/shared/migrations/${name}`, "utf8"))
+      .join("\n");
     const migrationTables = [...migration.matchAll(/create table if not exists "?([a-z_]+)"?/g)].map((match) => match[1]).sort();
 
     expect(migrationTables).toEqual(expectedTables);

@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:auth-http": "vitest run tests/integration/auth-http.test.ts",
-    "test:http": "vitest run tests/integration/auth-http.test.ts tests/integration/annotations-http.test.ts tests/integration/upload-publish.test.ts",
+    "test:http": "vitest run tests/integration/auth-http.test.ts tests/integration/annotations-http.test.ts tests/integration/upload-publish.test.ts tests/integration/upload-sessions-http.test.ts",
     "test:repositories": "bun tests/integration/bun-repository-contract.ts && vitest run tests/integration/postgres-repository.test.ts",
     "test:postgres": "vitest run tests/integration/postgres-repository.test.ts",
     "test:storage": "vitest run tests/integration/storage-contract.test.ts",

@@ -13,6 +13,7 @@ services:
       SQLITE_PATH: /data/opendrop.sqlite
       OPENDROP_STORAGE_DRIVER: s3
       S3_ENDPOINT: http://minio:9000
+      S3_PRESIGN_ENDPOINT: ${S3_PRESIGN_ENDPOINT:-http://localhost:9000}
       S3_REGION: us-east-1
       S3_BUCKET: opendrop
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}

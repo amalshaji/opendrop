@@ -200,6 +200,47 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   assert.equal(first.version.versionNumber, 1);
   assert.equal(first.family.latestVersionId, first.version.id);
 
+  const uploadSession = await repo.createUploadSession({
+    id: `upl_${suffix}`,
+    ownerUserId: user.id,
+    namespace: user.defaultNamespace,
+    slug: `session-${suffix}`,
+    visibility: "public",
+    versionId: `ver_session_${suffix}`,
+    manifestHash: `session-manifest-${suffix}`,
+    manifest: [
+      {
+        path: "index.html",
+        size: 12,
+        sha256: sha("hello world"),
+        contentType: "text/html; charset=utf-8",
+        lineCount: 1
+      }
+    ],
+    expiresAt: new Date(Date.now() + 60_000).toISOString()
+  });
+  assert.equal(uploadSession.status, "pending");
+  assert.equal(uploadSession.manifest[0]?.path, "index.html");
+  assert.equal(await repo.getUploadSessionForOwner(uploadSession.id, existingEmailUser.id), null);
+  const completedSession = await repo.transitionUploadSession({
+    sessionId: uploadSession.id,
+    ownerUserId: user.id,
+    expectedStatuses: ["pending"],
+    status: "completed",
+    completedResult: first
+  });
+  assert.equal(completedSession.status, "completed");
+  assert.equal(completedSession.completedResult?.version.id, first.version.id);
+  const repeatedCompletion = await repo.transitionUploadSession({
+    sessionId: uploadSession.id,
+    ownerUserId: user.id,
+    expectedStatuses: ["pending"],
+    status: "failed",
+    failureReason: "must not replace completion"
+  });
+  assert.equal(repeatedCompletion.status, "completed");
+  assert.equal(repeatedCompletion.failureReason, null);
+
   const second = await repo.createDeploymentVersion({
     namespace: user.defaultNamespace,
     slug,

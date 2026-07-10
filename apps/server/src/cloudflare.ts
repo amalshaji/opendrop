@@ -27,6 +27,10 @@ export interface Env {
   TRUSTED_HEADER_AUTO_PROVISION?: string;
   TRUSTED_HEADER_ALLOW_EMAIL_LINKING?: string;
   OPENDROP_TRUST_CLOUDFLARE_ACCESS?: string;
+  R2_ACCOUNT_ID?: string;
+  R2_BUCKET?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
 }
 
 export default {
@@ -35,7 +39,7 @@ export default {
     const authConfig = loadAuthConfig(authEnvironment);
     const services = {
       repo: createD1Repository(env.DB as any),
-      storage: new R2ArtifactStorage(env.ARTIFACTS as any),
+      storage: new R2ArtifactStorage(env.ARTIFACTS as any, r2DirectUploadConfig(env)),
       browserAuth: authConfig.authMode === "oauth" ? createBrowserAuth(authEnvironment, env.DB) : undefined,
       authConfig
     };
@@ -50,6 +54,20 @@ export default {
     return env.ASSETS.fetch(request);
   }
 };
+
+function r2DirectUploadConfig(env: Env) {
+  const values = [env.R2_ACCOUNT_ID, env.R2_BUCKET, env.R2_ACCESS_KEY_ID, env.R2_SECRET_ACCESS_KEY];
+  if (values.every((value) => !value)) return undefined;
+  if (values.some((value) => !value)) {
+    throw new Error("R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be configured together.");
+  }
+  return {
+    accountId: env.R2_ACCOUNT_ID!,
+    bucket: env.R2_BUCKET!,
+    accessKeyId: env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY!
+  };
+}
 
 function indexRequest(request: Request): Request {
   const url = new URL(request.url);

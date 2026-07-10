@@ -43,8 +43,9 @@ run_worker_first = true
 2. Build the web shell with `bun run --cwd apps/web build`.
 3. Update `apps/server/wrangler.toml` with the D1 database id, R2 bucket name, and `[assets]` binding.
 4. Configure OAuth secrets or Cloudflare Access/trusted headers. OAuth mode requires `BETTER_AUTH_SECRET` with at least 32 characters; trusted-header mode does not.
-5. Apply D1 migrations from `packages/shared/migrations`.
-6. Deploy with `bun run --cwd apps/server deploy:cloudflare`.
+5. To enable direct uploads, configure `R2_ACCOUNT_ID` and `R2_BUCKET`, then add R2 S3 API credentials as the `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` Worker secrets.
+6. Apply D1 migrations from `packages/shared/migrations`.
+7. Deploy with `bun run --cwd apps/server deploy:cloudflare`.
 
 ```bash
 bun run --cwd apps/web build
@@ -57,7 +58,18 @@ For OAuth, store credentials as Worker secrets rather than `[vars]` values:
 cd apps/server
 bunx wrangler secret put BETTER_AUTH_SECRET
 bunx wrangler secret put GITHUB_CLIENT_SECRET
+bunx wrangler secret put R2_ACCESS_KEY_ID
+bunx wrangler secret put R2_SECRET_ACCESS_KEY
 ```
+
+Add the non-secret R2 values to `[vars]`:
+
+```toml
+R2_ACCOUNT_ID = "replace-with-account-id"
+R2_BUCKET = "opendrop-artifacts"
+```
+
+The Worker continues to read finalized artifacts through the `ARTIFACTS` binding. The S3 API credentials are used only to sign five-minute exact-key, create-only PUT URLs; they are never returned to clients. Configure R2 CORS for the OpenDrop app origin with method `PUT` and allowed headers `content-type`, `cache-control`, `if-none-match`, and `x-amz-meta-sha256`. Presigned URLs are bearer credentials and must not be logged.
 
 `run_worker_first = true` lets the Worker enforce API, preview, and private-share access before falling back to the static React shell.
 
@@ -74,4 +86,4 @@ TRUSTED_PROXY_HOSTS = "cloudflare-workers"
 OPENDROP_TRUST_CLOUDFLARE_ACCESS = "true"
 ```
 
-Large browser uploads must stay below the Worker request body limit. For larger uploads, add a direct-to-R2 multipart flow before raising server-side caps.
+Browser and CLI publishes use staged direct-to-R2 uploads when the S3 API settings are present, avoiding the Worker request body limit. Legacy multipart publishing remains available when direct signing is not configured. Each file remains capped at 25 MiB; multipart object upload for larger individual files is not implemented.

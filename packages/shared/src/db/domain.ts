@@ -4,6 +4,7 @@ import {
   annotationViewportSchema,
   namespaceCandidateForEmail,
   namespaceCollisionSuffix,
+  uploadSessionManifestSchema,
   validateNamespace
 } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
@@ -12,9 +13,12 @@ import type {
   DeploymentFamilyRecord,
   DeploymentFileRecord,
   DeploymentVersionRecord,
+  DeploymentWithVersion,
   NamespaceAccessRecord,
   NamespaceMemberRecord,
-  NamespaceRecord
+  NamespaceRecord,
+  UploadSessionRecord,
+  UploadSessionStatus
 } from "./types";
 import { parseJsonColumn } from "./mappers";
 
@@ -42,6 +46,23 @@ interface AnnotationRow {
   shapeJson: string;
   viewportJson: string;
   resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UploadSessionRow {
+  id: string;
+  ownerUserId: string;
+  namespaceName: string;
+  slug: string;
+  visibility: string;
+  versionId: string;
+  manifestHash: string;
+  manifestJson: string;
+  status: string;
+  resultJson: string | null;
+  failureReason: string | null;
+  expiresAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +101,25 @@ export function mapDbAnnotation(row: AnnotationRow): AnnotationRecord {
     shape: parseJsonColumn(annotationShapeSchema, row.shapeJson),
     viewport: parseJsonColumn(annotationViewportSchema, row.viewportJson),
     resolvedAt: row.resolvedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+export function mapUploadSession(row: UploadSessionRow): UploadSessionRecord {
+  return {
+    id: row.id,
+    ownerUserId: row.ownerUserId,
+    namespace: row.namespaceName,
+    slug: row.slug,
+    visibility: row.visibility as Visibility,
+    versionId: row.versionId,
+    manifestHash: row.manifestHash,
+    manifest: parseJsonColumn(uploadSessionManifestSchema, row.manifestJson),
+    status: row.status as UploadSessionStatus,
+    completedResult: row.resultJson ? (JSON.parse(row.resultJson) as DeploymentWithVersion) : null,
+    failureReason: row.failureReason,
+    expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };

@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { nowIso, randomId, validateNamespace } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateVersionInput, OpenDropRepository } from "./repository";
+import type { CreateUploadSessionInput, CreateVersionInput, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -14,6 +14,7 @@ import type {
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
+  UploadSessionRecord,
   UserRecord
 } from "./types";
 import { dirname, resolve } from "node:path";
@@ -25,6 +26,7 @@ import {
   mapDeploymentFamily,
   mapDeploymentFile,
   mapDeploymentVersion,
+  mapUploadSession,
   namespaceAccessRecords,
   namespaceMemberRecord
 } from "./domain";
@@ -520,6 +522,58 @@ export class BunSqliteOpenDropRepository implements OpenDropRepository {
       family: mapDeploymentFamily(row.family),
       version: mapDeploymentVersion(row.version)
     }));
+  }
+
+  async createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord> {
+    const now = nowIso();
+    await this.orm.insert(sqliteOpenDropSchema.uploadSessions).values({
+      id: input.id,
+      ownerUserId: input.ownerUserId,
+      namespaceName: input.namespace,
+      slug: input.slug,
+      visibility: input.visibility,
+      versionId: input.versionId,
+      manifestHash: input.manifestHash,
+      manifestJson: JSON.stringify(input.manifest),
+      status: "pending",
+      resultJson: null,
+      failureReason: null,
+      expiresAt: input.expiresAt,
+      createdAt: now,
+      updatedAt: now
+    });
+    const record = await this.getUploadSessionForOwner(input.id, input.ownerUserId);
+    if (!record) throw new Error("Upload session could not be created.");
+    return record;
+  }
+
+  async getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null> {
+    const row = await this.orm
+      .select()
+      .from(sqliteOpenDropSchema.uploadSessions)
+      .where(and(eq(sqliteOpenDropSchema.uploadSessions.id, sessionId), eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, ownerUserId)))
+      .get();
+    return row ? mapUploadSession(row) : null;
+  }
+
+  async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {
+    if (input.expectedStatuses.length === 0) throw new Error("Expected upload session statuses are required.");
+    await this.orm
+      .update(sqliteOpenDropSchema.uploadSessions)
+      .set({
+        status: input.status,
+        resultJson: input.completedResult ? JSON.stringify(input.completedResult) : null,
+        failureReason: input.failureReason ?? null,
+        updatedAt: nowIso()
+      })
+      .where(and(
+        eq(sqliteOpenDropSchema.uploadSessions.id, input.sessionId),
+        eq(sqliteOpenDropSchema.uploadSessions.ownerUserId, input.ownerUserId),
+        inArray(sqliteOpenDropSchema.uploadSessions.status, input.expectedStatuses)
+      ));
+    const record = await this.getUploadSessionForOwner(input.sessionId, input.ownerUserId);
+    if (!record) throw new Error("Upload session not found.");
+    return record;
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {

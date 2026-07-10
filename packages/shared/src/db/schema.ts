@@ -144,6 +144,27 @@ export const sqliteDeploymentFiles = sqliteTable(
   ]
 );
 
+export const sqliteUploadSessions = sqliteTable(
+  "upload_sessions",
+  {
+    id: sqliteText("id").primaryKey(),
+    ownerUserId: sqliteText("owner_user_id").notNull().references(() => sqliteUsers.id),
+    namespaceName: sqliteText("namespace_name").notNull(),
+    slug: sqliteText("slug").notNull(),
+    visibility: sqliteText("visibility").notNull(),
+    versionId: sqliteText("version_id").notNull().unique(),
+    manifestHash: sqliteText("manifest_hash").notNull(),
+    manifestJson: sqliteText("manifest_json").notNull(),
+    status: sqliteText("status").notNull(),
+    resultJson: sqliteText("result_json"),
+    failureReason: sqliteText("failure_reason"),
+    expiresAt: sqliteText("expires_at").notNull(),
+    createdAt: sqliteText("created_at").notNull(),
+    updatedAt: sqliteText("updated_at").notNull()
+  },
+  (table) => [sqliteIndex("idx_upload_sessions_owner_status").on(table.ownerUserId, table.status)]
+);
+
 export const sqliteAnnotations = sqliteTable(
   "annotations",
   {
@@ -207,6 +228,7 @@ export const sqliteOpenDropSchema = {
   deploymentFamilies: sqliteDeploymentFamilies,
   deploymentVersions: sqliteDeploymentVersions,
   deploymentFiles: sqliteDeploymentFiles,
+  uploadSessions: sqliteUploadSessions,
   annotations: sqliteAnnotations,
   cliTokens: sqliteCliTokens,
   deviceAuthorizations: sqliteDeviceAuthorizations
@@ -355,6 +377,27 @@ export const pgDeploymentFiles = pgTable(
   ]
 );
 
+export const pgUploadSessions = pgTable(
+  "upload_sessions",
+  {
+    id: pgText("id").primaryKey(),
+    ownerUserId: pgText("owner_user_id").notNull().references(() => pgUsers.id),
+    namespaceName: pgText("namespace_name").notNull(),
+    slug: pgText("slug").notNull(),
+    visibility: pgText("visibility").notNull(),
+    versionId: pgText("version_id").notNull().unique(),
+    manifestHash: pgText("manifest_hash").notNull(),
+    manifestJson: pgText("manifest_json").notNull(),
+    status: pgText("status").notNull(),
+    resultJson: pgText("result_json"),
+    failureReason: pgText("failure_reason"),
+    expiresAt: pgText("expires_at").notNull(),
+    createdAt: pgText("created_at").notNull(),
+    updatedAt: pgText("updated_at").notNull()
+  },
+  (table) => [pgIndex("idx_upload_sessions_owner_status").on(table.ownerUserId, table.status)]
+);
+
 export const pgAnnotations = pgTable(
   "annotations",
   {
@@ -418,6 +461,7 @@ export const pgOpenDropSchema = {
   deploymentFamilies: pgDeploymentFamilies,
   deploymentVersions: pgDeploymentVersions,
   deploymentFiles: pgDeploymentFiles,
+  uploadSessions: pgUploadSessions,
   annotations: pgAnnotations,
   cliTokens: pgCliTokens,
   deviceAuthorizations: pgDeviceAuthorizations

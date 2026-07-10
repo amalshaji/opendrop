@@ -151,6 +151,39 @@ test("publish controls stay inside the upload card after validation", async ({ p
   expect(dockBounds!.y + dockBounds!.height).toBeLessThanOrEqual(panelBounds!.y + panelBounds!.height + 1);
 });
 
+test("direct folder upload reports progress and explicit capability failure falls back", async ({ page }) => {
+  const namespace = uniqueName("directowner");
+  await loginWithDevAuth(page, `${namespace}@example.com`);
+  let putCount = 0;
+  await page.route("http://127.0.0.1:19000/**", async (route) => {
+    putCount += 1;
+    await new Promise((resolveWait) => setTimeout(resolveWait, putCount === 1 ? 100 : 900));
+    await route.continue();
+  });
+  await page.locator("input[type=file]").first().setInputFiles(validSite);
+  await page.getByPlaceholder("slug optional").fill(uniqueName("direct-progress"));
+  await expect(page.getByRole("button", { name: "Publish" })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("Uploading 1 of 2 files...")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".publishSuccessBanner")).toBeVisible({ timeout: 15_000 });
+  expect(putCount).toBe(2);
+
+  await page.goto("/");
+  await page.unroute("http://127.0.0.1:19000/**");
+  await page.route("**/api/uploads/sessions", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "disabled", code: "direct_upload_unavailable" })
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await uploadFolder(page, uniqueName("multipart-fallback"));
+});
+
 test("UI auth, upload, view, comment, reply, versions, and visibility", async ({ browser, page }) => {
   const namespace = uniqueName("uiowner");
   const email = `${namespace}@example.com`;

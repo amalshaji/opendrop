@@ -9,6 +9,8 @@ import type {
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
+  UploadSessionRecord,
+  UploadSessionStatus,
   UserRecord
 } from "./types";
 
@@ -20,6 +22,27 @@ export interface CreateVersionInput {
   visibility: Visibility;
   manifestHash: string;
   files: Array<FileManifestEntry & { storageKey: string }>;
+}
+
+export interface CreateUploadSessionInput {
+  id: string;
+  ownerUserId: string;
+  namespace: string;
+  slug: string;
+  visibility: Visibility;
+  versionId: string;
+  manifestHash: string;
+  manifest: FileManifestEntry[];
+  expiresAt: string;
+}
+
+export interface TransitionUploadSessionInput {
+  sessionId: string;
+  ownerUserId: string;
+  expectedStatuses: UploadSessionStatus[];
+  status: UploadSessionStatus;
+  completedResult?: DeploymentWithVersion;
+  failureReason?: string;
 }
 
 export type DeviceTokenExchangeResult =
@@ -65,6 +88,9 @@ export interface OpenDropRepository {
   getDeploymentFamily(namespace: string, slug: string): Promise<DeploymentFamilyRecord | null>;
   listDeploymentsForUser(userId: string): Promise<DeploymentWithVersion[]>;
   createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion>;
+  createUploadSession(input: CreateUploadSessionInput): Promise<UploadSessionRecord>;
+  getUploadSessionForOwner(sessionId: string, ownerUserId: string): Promise<UploadSessionRecord | null>;
+  transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord>;
   setDeploymentVisibility(namespace: string, slug: string, visibility: Visibility, userId: string): Promise<DeploymentFamilyRecord>;
   restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion>;
   getDeploymentVersion(namespace: string, slug: string, versionId?: string): Promise<DeploymentWithVersion | null>;
