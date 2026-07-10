@@ -1,5 +1,5 @@
 import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import type { ArtifactObject, ArtifactStorage, DirectUploadRequest, PresignedUploadTarget } from "./interface";
+import type { ArtifactObject, ArtifactStorage, DirectUploadCapability } from "./interface";
 import { S3DirectUploadPresigner } from "./presigner";
 
 export interface S3StorageConfig {
@@ -13,7 +13,7 @@ export interface S3StorageConfig {
 }
 
 export class S3ArtifactStorage implements ArtifactStorage {
-  readonly directUploadEnabled = true;
+  readonly directUpload: DirectUploadCapability;
   private client: S3Client;
   private bucket: string;
   private presigner: S3DirectUploadPresigner;
@@ -33,6 +33,7 @@ export class S3ArtifactStorage implements ArtifactStorage {
       ...config,
       endpoint: config.presignEndpoint ?? config.endpoint
     });
+    this.directUpload = { presignPutObject: (request) => this.presigner.presignPutObject(request) };
   }
 
   async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
@@ -83,7 +84,4 @@ export class S3ArtifactStorage implements ArtifactStorage {
     } while (token);
   }
 
-  async presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget> {
-    return this.presigner.presignPutObject(request);
-  }
 }

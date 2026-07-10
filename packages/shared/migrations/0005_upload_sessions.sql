@@ -8,7 +8,6 @@ create table if not exists upload_sessions (
   manifest_hash text not null,
   manifest_json text not null,
   status text not null,
-  result_json text,
   failure_reason text,
   expires_at text not null,
   created_at text not null,

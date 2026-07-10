@@ -3,7 +3,7 @@ import {
   DEFAULT_VALIDATION_LIMITS,
   DIRECT_UPLOAD_MANIFEST_MAX_BYTES,
   isDirectUploadFallbackCode,
-  publishResultWithValidation,
+  runDirectUpload,
   serializedUploadManifestBytes,
   uploadSessionCreateBodySchema,
   uploadSessionUrlsBodySchema,
@@ -47,7 +47,7 @@ describe("upload session schemas", () => {
     expect(uploadSessionCreateBodySchema.safeParse({ manifest }).success).toBe(false);
   });
 
-  it("preserves local skipped files and issues in the direct publish result", () => {
+  it("runs the shared client protocol and preserves local validation details", async () => {
     const validation: ValidationResult = {
       ok: true,
       hasIndexHtml: true,
@@ -58,9 +58,51 @@ describe("upload session schemas", () => {
       totalSkippedBytes: 4,
       totalLineCount: 1
     };
-    const result = publishResultWithValidation({ url: "/team/demo", validation: { stale: true } }, validation);
-    expect(result.validation.skippedFiles).toHaveLength(1);
-    expect(result.validation.issues[0]?.code).toBe("file_too_large");
+    const requests: string[] = [];
+    let uploaded = false;
+    const direct = await runDirectUpload(
+      { validation, bytesByPath: new Map([["index.html", new TextEncoder().encode("home")]]) },
+      { slug: "demo" },
+      {
+        request: async (path) => {
+          requests.push(path);
+          if (path === "/api/uploads/sessions") {
+            return Response.json({
+              sessionId: "upl_1",
+              versionId: "ver_1",
+              namespace: "team",
+              slug: "demo",
+              visibility: "public",
+              expiresAt: new Date(Date.now() + 60_000).toISOString()
+            }, { status: 201 });
+          }
+          if (path.endsWith("/urls")) {
+            return Response.json({ uploads: [{
+              path: "index.html",
+              url: "https://storage.example.test/index.html",
+              method: "PUT",
+              headers: { "content-type": entry.contentType },
+              expiresAt: new Date(Date.now() + 60_000).toISOString()
+            }] });
+          }
+          return Response.json(publishResult([]));
+        },
+        put: async () => {
+          uploaded = true;
+          return new Response(null, { status: 200 });
+        }
+      }
+    );
+    expect(direct.kind).toBe("published");
+    if (direct.kind !== "published") throw new Error("Expected publish result.");
+    expect(direct.result.validation.skippedFiles).toHaveLength(1);
+    expect(direct.result.validation.issues[0]?.code).toBe("file_too_large");
+    expect(uploaded).toBe(true);
+    expect(requests).toEqual([
+      "/api/uploads/sessions",
+      "/api/uploads/sessions/upl_1/urls",
+      "/api/uploads/sessions/upl_1/finalize"
+    ]);
   });
 
   it("allows fallback only for explicit pre-session capability codes", () => {
@@ -70,3 +112,43 @@ describe("upload session schemas", () => {
     expect(isDirectUploadFallbackCode("storage_failed")).toBe(false);
   });
 });
+
+function publishResult(skippedFiles: unknown[]) {
+  return {
+    namespace: "team",
+    slug: "demo",
+    visibility: "public",
+    url: "/team/demo",
+    versionUrl: "/team/demo?version=ver_1",
+    family: {
+      id: "dep_1",
+      namespaceId: "nsp_1",
+      namespaceName: "team",
+      slug: "demo",
+      ownerUserId: "usr_1",
+      latestVersionId: "ver_1",
+      visibility: "public",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    },
+    version: {
+      id: "ver_1",
+      versionNumber: 1,
+      createdAt: new Date(0).toISOString(),
+      createdByUserId: "usr_1",
+      manifestHash: "hash",
+      fileCount: 1,
+      totalBytes: 4
+    },
+    validation: {
+      ok: true,
+      hasIndexHtml: true,
+      acceptedFiles: [entry],
+      skippedFiles,
+      issues: [],
+      totalAcceptedBytes: 4,
+      totalSkippedBytes: 0,
+      totalLineCount: 1
+    }
+  };
+}

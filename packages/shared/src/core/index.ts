@@ -1,5 +1,6 @@
 export * from "./ids";
 export * from "./concurrency";
+export * from "./direct-upload-client";
 export * from "./mime";
 export * from "./namespace";
 export * from "./paths";

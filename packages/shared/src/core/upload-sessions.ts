@@ -2,7 +2,7 @@ import { z } from "zod";
 import { contentTypeForPath, isTextLike } from "./mime";
 import { normalizeArtifactPath } from "./paths";
 import { uploadMetadataSchema } from "./schemas";
-import { fileManifestEntrySchema, type FileManifestEntry, type ValidationIssue, type ValidationResult } from "./types";
+import { deploymentVersionSchema, fileManifestEntrySchema, validationResultSchema, visibilitySchema, type FileManifestEntry, type ValidationIssue, type ValidationResult } from "./types";
 import { DEFAULT_VALIDATION_LIMITS } from "./validation";
 
 export const UPLOAD_SESSION_TTL_MS = 15 * 60 * 1000;
@@ -11,6 +11,8 @@ export const DIRECT_UPLOAD_URL_TTL_SECONDS = 5 * 60;
 export const DIRECT_UPLOAD_URL_BATCH_MAX = 100;
 export const DIRECT_UPLOAD_MANIFEST_MAX_BYTES = 1_000_000;
 export const DIRECT_UPLOAD_FALLBACK_CODES = ["direct_upload_unavailable", "direct_upload_manifest_too_large"] as const;
+export const uploadSessionStatusSchema = z.enum(["pending", "finalizing", "completed", "failed"]);
+export type UploadSessionStatus = z.infer<typeof uploadSessionStatusSchema>;
 
 const uploadSessionManifestEntrySchema = fileManifestEntrySchema
   .extend({
@@ -99,8 +101,30 @@ export const uploadSessionUrlsResponseSchema = z.object({
   uploads: z.array(directUploadTargetSchema)
 });
 
+export const publishResultSchema = z.object({
+  namespace: z.string().min(1),
+  slug: z.string().min(1),
+  visibility: visibilitySchema,
+  url: z.string().min(1),
+  versionUrl: z.string().min(1),
+  family: z.object({
+    id: z.string().min(1),
+    namespaceId: z.string().min(1),
+    namespaceName: z.string().min(1),
+    slug: z.string().min(1),
+    ownerUserId: z.string().min(1),
+    latestVersionId: z.string().min(1),
+    visibility: visibilitySchema,
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1)
+  }),
+  version: deploymentVersionSchema,
+  validation: validationResultSchema
+});
+
 export type UploadSessionCreateBody = z.infer<typeof uploadSessionCreateBodySchema>;
 export type DirectUploadTarget = z.infer<typeof directUploadTargetSchema>;
+export type PublishResult = z.infer<typeof publishResultSchema>;
 
 export function serializedUploadManifestBytes(manifest: unknown): number {
   return new TextEncoder().encode(JSON.stringify(manifest)).byteLength;
@@ -108,13 +132,6 @@ export function serializedUploadManifestBytes(manifest: unknown): number {
 
 export function isDirectUploadFallbackCode(code: unknown): boolean {
   return typeof code === "string" && (DIRECT_UPLOAD_FALLBACK_CODES as readonly string[]).includes(code);
-}
-
-export function publishResultWithValidation<T extends Record<string, unknown>>(
-  result: T,
-  validation: ValidationResult
-): T & { validation: ValidationResult } {
-  return { ...result, validation };
 }
 
 export function validationResultForManifest(acceptedFiles: FileManifestEntry[]): ValidationResult {

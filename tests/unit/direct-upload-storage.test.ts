@@ -20,7 +20,7 @@ describe("direct upload storage signing", () => {
       forcePathStyle: true
     });
 
-    const target = await storage.presignPutObject(request);
+    const target = await storage.directUpload!.presignPutObject(request);
 
     expect(new URL(target.url).origin).toBe("https://uploads.example.test");
     expect(target.url).toContain("artifacts/team/demo/ver_1/index.html");
@@ -37,8 +37,7 @@ describe("direct upload storage signing", () => {
 
   it("keeps R2 direct uploads disabled until S3 API credentials are configured", async () => {
     const storage = new R2ArtifactStorage(emptyBucket);
-    expect(storage.directUploadEnabled).toBe(false);
-    await expect(storage.presignPutObject(request)).rejects.toThrow("not configured");
+    expect(storage.directUpload).toBeUndefined();
   });
 });
 

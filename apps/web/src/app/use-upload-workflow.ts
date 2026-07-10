@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   uploadMetadataSchema,
+  publishResultSchema,
   validationResultSchema,
+  type PreparedUpload,
   type ValidationResult,
   type Visibility
 } from "@opendrop/shared/core";
 import { validationMessage } from "@/app/format";
-import { filesFromDataTransfer, publishDirectUpload, uploadFormData, validateBrowserUpload } from "@/app/upload-files";
+import { filesFromDataTransfer, prepareBrowserUpload, publishDirectUpload, uploadFormData } from "@/app/upload-files";
 import type { PublishResult, Session } from "@/app/types";
 
 interface UseUploadWorkflowOptions {
@@ -23,10 +25,12 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
   const [slug, setSlug] = useState("");
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [preparedUpload, setPreparedUpload] = useState<PreparedUpload | null>(null);
   const [lastPublished, setLastPublished] = useState<PublishResult | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const zipInputRef = useRef<HTMLInputElement | null>(null);
+  const validationGenerationRef = useRef(0);
 
   useEffect(() => {
     if (session?.user) {
@@ -46,12 +50,16 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
   const lastPublishedDisplayUrl = lastPublishedHref ? `${location.origin}${lastPublishedHref}` : "";
 
   async function validate() {
+    const generation = validationGenerationRef.current;
     setStatus("Validating upload...");
-    const result = validationResultSchema.safeParse(await validateBrowserUpload(files));
+    const prepared = await prepareBrowserUpload(files);
+    if (generation !== validationGenerationRef.current) return;
+    const result = validationResultSchema.safeParse(prepared.validation);
     if (!result.success) {
       setStatus("Validation response was invalid.");
       return;
     }
+    setPreparedUpload(prepared);
     setValidation(result.data);
     setStatus(result.data.ok ? "Ready to publish." : "Validation needs attention.");
   }
@@ -69,10 +77,11 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
     setIsPublishing(true);
     setStatus("Preparing upload...");
     try {
-      const direct = await publishDirectUpload(files, metadata.data, (completed, total) => {
+      if (!preparedUpload) throw new Error("Upload validation has not completed.");
+      const direct = await publishDirectUpload(preparedUpload, metadata.data, (completed, total) => {
         setStatus(`Uploading ${completed} of ${total} files...`);
       });
-      let result: Record<string, unknown>;
+      let result: PublishResult;
       if (direct.kind === "unavailable") {
         setStatus("Direct upload unavailable. Publishing version...");
         const response = await fetch("/api/uploads/publish", {
@@ -80,18 +89,19 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
           credentials: "include",
           body: uploadFormData(files, metadata.data)
         });
-        result = await response.json() as Record<string, unknown>;
+        const responseBody = await response.json();
         if (!response.ok) {
-          setStatus(typeof result.error === "string" ? result.error : "Publish failed.");
+          setStatus(typeof responseBody?.error === "string" ? responseBody.error : "Publish failed.");
           return;
         }
+        result = publishResultSchema.parse(responseBody);
       } else {
         setStatus("Finalizing version...");
         result = direct.result;
       }
-      setLastPublished(result as PublishResult);
+      setLastPublished(result);
       setStatus("Published.");
-      await onPublished(result as PublishResult);
+      await onPublished(result);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Publish failed.");
     } finally {
@@ -118,14 +128,18 @@ export function useUploadWorkflow({ session, setStatus, onPublished }: UseUpload
     if (acceptedFiles.length === 0) return;
 
     setFiles(acceptedFiles);
+    validationGenerationRef.current += 1;
     setValidation(null);
+    setPreparedUpload(null);
     setLastPublished(null);
     setStatus(source === "drop" ? "Files dropped. Validating..." : "Files selected. Validating...");
   }
 
   function clearUploadFiles() {
+    validationGenerationRef.current += 1;
     setFiles([]);
     setValidation(null);
+    setPreparedUpload(null);
     setLastPublished(null);
     setUploadErrors([]);
     setStatus("Upload cleared.");

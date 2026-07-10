@@ -18,10 +18,13 @@ export interface PresignedUploadTarget {
   expiresAt: string;
 }
 
+export interface DirectUploadCapability {
+  presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget>;
+}
+
 export interface ArtifactStorage {
-  readonly directUploadEnabled?: boolean;
+  readonly directUpload?: DirectUploadCapability;
   putObject(key: string, body: Uint8Array, contentType: string): Promise<void>;
   getObject(key: string): Promise<ArtifactObject | null>;
   deletePrefix(prefix: string): Promise<void>;
-  presignPutObject?(request: DirectUploadRequest): Promise<PresignedUploadTarget>;
 }

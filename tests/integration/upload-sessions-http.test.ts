@@ -10,14 +10,16 @@ import {
   type FileManifestEntry
 } from "@opendrop/shared/core";
 import type {
+  CompleteUploadSessionInput,
   CreateUploadSessionInput,
   CreateVersionInput,
+  FailUploadSessionInput,
+  FailUploadSessionResult,
   FinalizeUploadSessionClaim,
-  OpenDropRepository,
-  TransitionUploadSessionInput
+  OpenDropRepository
 } from "@opendrop/shared/db/repository";
 import type { DeploymentWithVersion, IdentityInput, UploadSessionRecord, UserRecord } from "@opendrop/shared/db/types";
-import type { ArtifactObject, ArtifactStorage, DirectUploadRequest, PresignedUploadTarget } from "@opendrop/shared/storage/interface";
+import type { ArtifactObject, ArtifactStorage, DirectUploadCapability, DirectUploadRequest, PresignedUploadTarget } from "@opendrop/shared/storage/interface";
 import type { BrowserAuth } from "../../apps/server/src/auth";
 
 describe("direct upload sessions", () => {
@@ -203,46 +205,11 @@ describe("direct upload sessions", () => {
     expect((await repository.getUploadSessionForOwner("upl_expired", user!.id))?.status).toBe("failed");
   });
 
-  it("reconciles an expired finalizing session only when its preallocated version exists", async () => {
+  it("fails and cleans an expired finalization lease", async () => {
     await app.fetch(sessionRequest("owner@example.com"));
     const repository = repo.asRepository();
     const user = await repository.getUserByIdentity("dev", "owner@example.com");
     const hash = await manifestHash([indexEntry]);
-    await repository.createUploadSession({
-      id: "upl_crashed_complete",
-      ownerUserId: user!.id,
-      namespace: user!.defaultNamespace,
-      slug: "crashed-complete",
-      visibility: "public",
-      versionId: "ver_crashed_complete",
-      manifestHash: hash,
-      manifest: [indexEntry],
-      expiresAt: new Date(Date.now() - 1_000).toISOString()
-    });
-    expect((await repository.transitionUploadSession({
-      sessionId: "upl_crashed_complete",
-      ownerUserId: user!.id,
-      expectedStatuses: ["pending"],
-      status: "finalizing"
-    })).status).toBe("finalizing");
-    await repository.createDeploymentVersion({
-      namespace: user!.defaultNamespace,
-      slug: "crashed-complete",
-      versionId: "ver_crashed_complete",
-      ownerUserId: user!.id,
-      visibility: "public",
-      manifestHash: hash,
-      files: [{
-        ...indexEntry,
-        storageKey: storageKey(user!.defaultNamespace, "crashed-complete", "ver_crashed_complete", "index.html")
-      }]
-    });
-
-    const completed = await app.fetch(finalizeRequest("upl_crashed_complete", "owner@example.com"));
-    expect(completed.status).toBe(200);
-    expect((await repository.getUploadSessionForOwner("upl_crashed_complete", user!.id))?.status).toBe("completed");
-    expect(storage.getObjectCalls).toBe(0);
-
     await repository.createUploadSession({
       id: "upl_crashed_failed",
       ownerUserId: user!.id,
@@ -254,12 +221,7 @@ describe("direct upload sessions", () => {
       manifest: [indexEntry],
       expiresAt: new Date(Date.now() - 1_000).toISOString()
     });
-    expect((await repository.transitionUploadSession({
-      sessionId: "upl_crashed_failed",
-      ownerUserId: user!.id,
-      expectedStatuses: ["pending"],
-      status: "finalizing"
-    })).status).toBe("finalizing");
+    repo.forceFinalizing("upl_crashed_failed");
     await storage.putObject(
       storageKey(user!.defaultNamespace, "crashed-failed", "ver_crashed_failed", "index.html"),
       indexBytes,
@@ -368,7 +330,8 @@ class SessionTestRepo {
       },
       claimUploadSessionForFinalization: async (sessionId, ownerUserId, finalizationExpiresAt) =>
         this.claimUploadSessionForFinalization(sessionId, ownerUserId, finalizationExpiresAt),
-      transitionUploadSession: async (input) => this.transitionUploadSession(input),
+      failUploadSession: async (input) => this.failUploadSession(input),
+      completeUploadSession: async (input) => this.completeUploadSession(input),
       createDeploymentVersion: async (input) => this.createDeploymentVersion(input),
       getDeploymentVersion: async (namespace, slug, versionId) => {
         const deployment = this.deployments.get(`${namespace}/${slug}`) ?? null;
@@ -379,6 +342,12 @@ class SessionTestRepo {
         return deployment ? [deployment.version] : [];
       }
     } as unknown as OpenDropRepository;
+  }
+
+  forceFinalizing(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error("Upload session not found.");
+    this.sessions.set(sessionId, { ...session, status: "finalizing" });
   }
 
   private getOrCreateUser(identity: IdentityInput): UserRecord {
@@ -404,7 +373,6 @@ class SessionTestRepo {
     const record: UploadSessionRecord = {
       ...input,
       status: "pending",
-      completedResult: null,
       failureReason: null,
       createdAt: now,
       updatedAt: now
@@ -413,19 +381,28 @@ class SessionTestRepo {
     return record;
   }
 
-  private transitionUploadSession(input: TransitionUploadSessionInput): UploadSessionRecord {
+  private failUploadSession(input: FailUploadSessionInput): FailUploadSessionResult {
     const record = this.sessions.get(input.sessionId);
     if (!record || record.ownerUserId !== input.ownerUserId) throw new Error("Upload session not found.");
-    if (!input.expectedStatuses.includes(record.status)) return record;
+    if (record.status !== input.expectedStatus) return { failed: false, session: record };
     const next: UploadSessionRecord = {
       ...record,
-      status: input.status,
-      completedResult: input.completedResult ?? null,
-      failureReason: input.failureReason ?? null,
+      status: "failed",
+      failureReason: input.reason,
       updatedAt: new Date().toISOString()
     };
     this.sessions.set(next.id, next);
-    return next;
+    return { failed: true, session: next };
+  }
+
+  private completeUploadSession(input: CompleteUploadSessionInput): DeploymentWithVersion {
+    const session = this.sessions.get(input.sessionId);
+    if (!session || session.ownerUserId !== input.ownerUserId || session.status !== "finalizing") {
+      throw new Error("Upload session is not claimed for finalization.");
+    }
+    const deployment = this.createDeploymentVersion(input.deployment);
+    this.sessions.set(session.id, { ...session, status: "completed", failureReason: null, updatedAt: new Date().toISOString() });
+    return deployment;
   }
 
   private claimUploadSessionForFinalization(
@@ -484,13 +461,13 @@ class SessionTestRepo {
 
 class MemoryDirectStorage implements ArtifactStorage {
   readonly objects = new Map<string, { body: Uint8Array; contentType: string }>();
-  readonly directUploadEnabled: boolean;
+  readonly directUpload?: DirectUploadCapability;
   readonly deletedPrefixes: string[] = [];
   getObjectCalls = 0;
   private blockedRead?: { started: () => void; wait: Promise<void> };
 
   constructor(enabled = true) {
-    this.directUploadEnabled = enabled;
+    if (enabled) this.directUpload = { presignPutObject: (request) => this.presignPutObject(request) };
   }
 
   async putObject(key: string, body: Uint8Array, contentType: string): Promise<void> {
@@ -514,7 +491,7 @@ class MemoryDirectStorage implements ArtifactStorage {
     for (const key of this.objects.keys()) if (key.startsWith(prefix)) this.objects.delete(key);
   }
 
-  async presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget> {
+  private async presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget> {
     return {
       url: `https://storage.example.test/${encodeURIComponent(request.key)}`,
       method: "PUT",

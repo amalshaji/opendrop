@@ -1,4 +1,4 @@
-import type { AnnotationInput, FileManifestEntry, Visibility } from "../core";
+import type { AnnotationInput, FileManifestEntry, UploadSessionStatus as CoreUploadSessionStatus, Visibility } from "../core";
 
 export interface UserRecord {
   id: string;
@@ -72,8 +72,6 @@ export interface DeploymentWithVersion {
   version: DeploymentVersionRecord;
 }
 
-export type UploadSessionStatus = "pending" | "finalizing" | "completed" | "failed";
-
 export interface UploadSessionRecord {
   id: string;
   ownerUserId: string;
@@ -83,8 +81,7 @@ export interface UploadSessionRecord {
   versionId: string;
   manifestHash: string;
   manifest: FileManifestEntry[];
-  status: UploadSessionStatus;
-  completedResult: DeploymentWithVersion | null;
+  status: CoreUploadSessionStatus;
   failureReason: string | null;
   expiresAt: string;
   createdAt: string;

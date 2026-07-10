@@ -1,14 +1,10 @@
 import {
   filesFromZip,
-  isDirectUploadFallbackCode,
-  mapWithConcurrency,
-  normalizeUploadRoot,
-  uploadSessionCreateResponseSchema,
-  uploadSessionUrlsResponseSchema,
-  validateUploadFiles,
-  publishResultWithValidation,
+  prepareDirectUpload,
+  runDirectUpload,
+  type DirectUploadResult,
+  type PreparedUpload,
   type UploadFileLike,
-  type ValidationResult,
   type Visibility
 } from "@opendrop/shared/core";
 import type { WebkitDataTransferItem, WebkitDirectoryEntry, WebkitEntry, WebkitFileEntry } from "./types";
@@ -24,67 +20,18 @@ export function uploadFormData(files: File[], metadata: { namespace?: string; sl
   return data;
 }
 
-export type BrowserDirectUploadResult =
-  | { kind: "published"; result: Record<string, unknown> }
-  | { kind: "unavailable" };
-
-export async function validateBrowserUpload(files: File[]): Promise<ValidationResult> {
-  return validateUploadFiles(await prepareUploadFiles(files));
+export async function prepareBrowserUpload(files: File[]): Promise<PreparedUpload> {
+  return prepareDirectUpload(await prepareUploadFiles(files));
 }
 
 export async function publishDirectUpload(
-  files: File[],
+  prepared: PreparedUpload,
   metadata: { namespace?: string; slug?: string; visibility?: Visibility },
   onProgress: (completed: number, total: number) => void
-): Promise<BrowserDirectUploadResult> {
-  const preparedFiles = await prepareUploadFiles(files);
-  const validation = await validateUploadFiles(preparedFiles);
-  if (!validation.ok) throw new Error(validation.issues.map((issue) => issue.message).join(" "));
-  const bytesByPath = new Map(normalizeUploadRoot(preparedFiles).map((file) => [file.path, file.bytes]));
-  const createResponse = await fetch("/api/uploads/sessions", {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...metadata, manifest: validation.acceptedFiles })
-  });
-  if (!createResponse.ok) {
-    const body = await createResponse.json().catch(() => null) as { code?: string; error?: string } | null;
-    if ([413, 501, 503].includes(createResponse.status) && isDirectUploadFallbackCode(body?.code)) {
-      return { kind: "unavailable" };
-    }
-    throw new Error(body?.error ?? `Upload session creation failed (${createResponse.status}).`);
-  }
-  const session = uploadSessionCreateResponseSchema.parse(await createResponse.json());
-  for (let offset = 0; offset < validation.acceptedFiles.length; offset += 100) {
-    const paths = validation.acceptedFiles.slice(offset, offset + 100).map((file) => file.path);
-    const urlsResponse = await fetch(`/api/uploads/sessions/${session.sessionId}/urls`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paths })
-    });
-    if (!urlsResponse.ok) throw new Error(await responseError(urlsResponse, "Upload URL creation failed."));
-    const targets = uploadSessionUrlsResponseSchema.parse(await urlsResponse.json());
-    await mapWithConcurrency(targets.uploads, 4, async (target) => {
-      const bytes = bytesByPath.get(target.path);
-      if (!bytes) throw new Error(`Missing bytes for ${target.path}`);
-      const response = await fetch(target.url, {
-        method: "PUT",
-        headers: target.headers,
-        body: bytesToArrayBuffer(bytes)
-      });
-      if (!response.ok) throw new Error(`Direct upload failed for ${target.path} (${response.status}).`);
-    }, (completed) => onProgress(offset + completed, validation.acceptedFiles.length));
-  }
-  const finalizeResponse = await fetch(`/api/uploads/sessions/${session.sessionId}/finalize`, {
-    method: "POST",
-    credentials: "include"
-  });
-  if (!finalizeResponse.ok) throw new Error(await responseError(finalizeResponse, "Upload finalization failed."));
-  return {
-    kind: "published",
-    result: publishResultWithValidation(await finalizeResponse.json() as Record<string, unknown>, validation)
-  };
+): Promise<DirectUploadResult> {
+  return runDirectUpload(prepared, metadata, {
+    request: (path, init) => fetch(path, { ...init, credentials: "include" })
+  }, onProgress);
 }
 
 async function prepareUploadFiles(files: File[]): Promise<UploadFileLike[]> {
@@ -100,15 +47,6 @@ async function prepareUploadFiles(files: File[]): Promise<UploadFileLike[]> {
     });
   }
   return prepared;
-}
-
-function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
-async function responseError(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => null) as { error?: string } | null;
-  return body?.error ?? fallback;
 }
 
 export function uploadPath(file: File): string {

@@ -9,7 +9,7 @@ import {
   validateNamespace
 } from "../core";
 import type { AnnotationInput, Visibility } from "../core";
-import type { CreateUploadSessionInput, CreateVersionInput, FinalizeUploadSessionClaim, OpenDropRepository, TransitionUploadSessionInput } from "./repository";
+import type { CompleteUploadSessionInput, CreateUploadSessionInput, CreateVersionInput, FailUploadSessionInput, FailUploadSessionResult, FinalizeUploadSessionClaim, OpenDropRepository } from "./repository";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -513,7 +513,6 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
       manifestHash: input.manifestHash,
       manifestJson: JSON.stringify(input.manifest),
       status: "pending",
-      resultJson: null,
       failureReason: null,
       expiresAt: input.expiresAt,
       createdAt: now,
@@ -551,28 +550,47 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
     return session ? uploadSessionClaimResult(session, claimed.length > 0) : null;
   }
 
-  async transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord> {
-    if (input.expectedStatuses.length === 0) throw new Error("Expected upload session statuses are required.");
-    await this.orm
+  async failUploadSession(input: FailUploadSessionInput): Promise<FailUploadSessionResult> {
+    const failed = await this.orm
       .update(pgOpenDropSchema.uploadSessions)
-      .set({
-        status: input.status,
-        resultJson: input.completedResult ? JSON.stringify(input.completedResult) : null,
-        failureReason: input.failureReason ?? null,
-        updatedAt: nowIso()
-      })
+      .set({ status: "failed", failureReason: input.reason, updatedAt: nowIso() })
       .where(and(
         eq(pgOpenDropSchema.uploadSessions.id, input.sessionId),
         eq(pgOpenDropSchema.uploadSessions.ownerUserId, input.ownerUserId),
-        inArray(pgOpenDropSchema.uploadSessions.status, input.expectedStatuses)
-      ));
-    const record = await this.getUploadSessionForOwner(input.sessionId, input.ownerUserId);
-    if (!record) throw new Error("Upload session not found.");
-    return record;
+        eq(pgOpenDropSchema.uploadSessions.status, input.expectedStatus)
+      ))
+      .returning({ id: pgOpenDropSchema.uploadSessions.id });
+    const session = await this.getUploadSessionForOwner(input.sessionId, input.ownerUserId);
+    if (!session) throw new Error("Upload session not found.");
+    return { failed: failed.length > 0, session };
   }
 
   async createDeploymentVersion(input: CreateVersionInput): Promise<DeploymentWithVersion> {
+    return this.persistDeploymentVersion(input);
+  }
+
+  async completeUploadSession(input: CompleteUploadSessionInput): Promise<DeploymentWithVersion> {
+    return this.persistDeploymentVersion(input.deployment, input);
+  }
+
+  private async persistDeploymentVersion(
+    input: CreateVersionInput,
+    completion?: Pick<CompleteUploadSessionInput, "sessionId" | "ownerUserId">
+  ): Promise<DeploymentWithVersion> {
     return this.orm.transaction(async (tx) => {
+      const now = nowIso();
+      if (completion) {
+        const completed = await tx
+          .update(pgOpenDropSchema.uploadSessions)
+          .set({ status: "completed", failureReason: null, updatedAt: now })
+          .where(and(
+            eq(pgOpenDropSchema.uploadSessions.id, completion.sessionId),
+            eq(pgOpenDropSchema.uploadSessions.ownerUserId, completion.ownerUserId),
+            eq(pgOpenDropSchema.uploadSessions.status, "finalizing")
+          ))
+          .returning({ id: pgOpenDropSchema.uploadSessions.id });
+        if (completed.length === 0) throw new Error("Upload session is not claimed for finalization.");
+      }
       const [namespace] = await tx.select().from(pgOpenDropSchema.namespaces).where(eq(pgOpenDropSchema.namespaces.name, input.namespace)).limit(1);
       if (!namespace) throw new Error("Namespace not found.");
       const [ownedNamespace] = await tx
@@ -598,7 +616,6 @@ export class PostgresOpenDropRepository implements OpenDropRepository {
         throw new Error("User cannot publish to this namespace.");
       }
 
-      const now = nowIso();
       let [family] = await tx
         .select()
         .from(pgOpenDropSchema.deploymentFamilies)

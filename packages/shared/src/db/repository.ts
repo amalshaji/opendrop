@@ -1,4 +1,4 @@
-import type { AnnotationInput, FileManifestEntry, Visibility } from "../core";
+import type { AnnotationInput, FileManifestEntry, UploadSessionStatus, Visibility } from "../core";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
@@ -10,7 +10,6 @@ import type {
   NamespaceMemberRecord,
   NamespaceRecord,
   UploadSessionRecord,
-  UploadSessionStatus,
   UserRecord
 } from "./types";
 
@@ -36,13 +35,22 @@ export interface CreateUploadSessionInput {
   expiresAt: string;
 }
 
-export interface TransitionUploadSessionInput {
+export interface FailUploadSessionInput {
   sessionId: string;
   ownerUserId: string;
-  expectedStatuses: UploadSessionStatus[];
-  status: UploadSessionStatus;
-  completedResult?: DeploymentWithVersion;
-  failureReason?: string;
+  expectedStatus: Extract<UploadSessionStatus, "pending" | "finalizing">;
+  reason: string;
+}
+
+export interface CompleteUploadSessionInput {
+  sessionId: string;
+  ownerUserId: string;
+  deployment: CreateVersionInput;
+}
+
+export interface FailUploadSessionResult {
+  failed: boolean;
+  session: UploadSessionRecord;
 }
 
 export type FinalizeUploadSessionClaim = {
@@ -100,7 +108,8 @@ export interface OpenDropRepository {
     ownerUserId: string,
     finalizationExpiresAt: string
   ): Promise<FinalizeUploadSessionClaim | null>;
-  transitionUploadSession(input: TransitionUploadSessionInput): Promise<UploadSessionRecord>;
+  failUploadSession(input: FailUploadSessionInput): Promise<FailUploadSessionResult>;
+  completeUploadSession(input: CompleteUploadSessionInput): Promise<DeploymentWithVersion>;
   setDeploymentVisibility(namespace: string, slug: string, visibility: Visibility, userId: string): Promise<DeploymentFamilyRecord>;
   restoreDeploymentVersion(namespace: string, slug: string, versionId: string, userId: string): Promise<DeploymentWithVersion>;
   getDeploymentVersion(namespace: string, slug: string, versionId?: string): Promise<DeploymentWithVersion | null>;

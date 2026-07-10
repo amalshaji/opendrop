@@ -4,21 +4,20 @@ import {
   annotationViewportSchema,
   namespaceCandidateForEmail,
   namespaceCollisionSuffix,
+  uploadSessionStatusSchema,
   uploadSessionManifestSchema,
   validateNamespace
 } from "../core";
-import type { AnnotationInput, Visibility } from "../core";
+import type { AnnotationInput, UploadSessionStatus, Visibility } from "../core";
 import type {
   AnnotationRecord,
   DeploymentFamilyRecord,
   DeploymentFileRecord,
   DeploymentVersionRecord,
-  DeploymentWithVersion,
   NamespaceAccessRecord,
   NamespaceMemberRecord,
   NamespaceRecord,
-  UploadSessionRecord,
-  UploadSessionStatus
+  UploadSessionRecord
 } from "./types";
 import { parseJsonColumn } from "./mappers";
 import type { FinalizeUploadSessionClaim } from "./repository";
@@ -61,7 +60,6 @@ interface UploadSessionRow {
   manifestHash: string;
   manifestJson: string;
   status: string;
-  resultJson: string | null;
   failureReason: string | null;
   expiresAt: string;
   createdAt: string;
@@ -117,8 +115,7 @@ export function mapUploadSession(row: UploadSessionRow): UploadSessionRecord {
     versionId: row.versionId,
     manifestHash: row.manifestHash,
     manifest: parseJsonColumn(uploadSessionManifestSchema, row.manifestJson),
-    status: row.status as UploadSessionStatus,
-    completedResult: row.resultJson ? (JSON.parse(row.resultJson) as DeploymentWithVersion) : null,
+    status: uploadSessionStatusSchema.parse(row.status),
     failureReason: row.failureReason,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,

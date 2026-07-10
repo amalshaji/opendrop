@@ -229,25 +229,59 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
   assert.equal(claim?.session.status, "finalizing");
   assert.equal(claim?.session.expiresAt, finalizationExpiresAt);
   assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id, finalizationExpiresAt))?.outcome, "in_progress");
-  const completedSession = await repo.transitionUploadSession({
+  const sessionDeployment = await repo.completeUploadSession({
     sessionId: uploadSession.id,
     ownerUserId: user.id,
-    expectedStatuses: ["finalizing"],
-    status: "completed",
-    completedResult: first
+    deployment: {
+      namespace: user.defaultNamespace,
+      slug: uploadSession.slug,
+      versionId: uploadSession.versionId,
+      ownerUserId: user.id,
+      visibility: uploadSession.visibility,
+      manifestHash: uploadSession.manifestHash,
+      files: uploadSession.manifest.map((file) => ({
+        ...file,
+        storageKey: `artifacts/${suffix}/${uploadSession.versionId}/${file.path}`
+      }))
+    }
   });
-  assert.equal(completedSession.status, "completed");
-  assert.equal(completedSession.completedResult?.version.id, first.version.id);
-  const repeatedCompletion = await repo.transitionUploadSession({
+  assert.equal(sessionDeployment.version.id, uploadSession.versionId);
+  assert.equal((await repo.getUploadSessionForOwner(uploadSession.id, user.id))?.status, "completed");
+  const rejectedFailure = await repo.failUploadSession({
     sessionId: uploadSession.id,
     ownerUserId: user.id,
-    expectedStatuses: ["pending"],
-    status: "failed",
-    failureReason: "must not replace completion"
+    expectedStatus: "pending",
+    reason: "must not replace completion"
   });
-  assert.equal(repeatedCompletion.status, "completed");
-  assert.equal(repeatedCompletion.failureReason, null);
+  assert.equal(rejectedFailure.failed, false);
+  assert.equal(rejectedFailure.session.status, "completed");
   assert.equal((await repo.claimUploadSessionForFinalization(uploadSession.id, user.id, finalizationExpiresAt))?.outcome, "completed");
+
+  const rollbackSession = await repo.createUploadSession({
+    ...uploadSession,
+    id: `upl_rollback_${suffix}`,
+    slug: `rollback-${suffix}`,
+    versionId: first.version.id
+  });
+  await repo.claimUploadSessionForFinalization(rollbackSession.id, user.id, finalizationExpiresAt);
+  await assert.rejects(repo.completeUploadSession({
+    sessionId: rollbackSession.id,
+    ownerUserId: user.id,
+    deployment: {
+      namespace: user.defaultNamespace,
+      slug: rollbackSession.slug,
+      versionId: rollbackSession.versionId,
+      ownerUserId: user.id,
+      visibility: rollbackSession.visibility,
+      manifestHash: rollbackSession.manifestHash,
+      files: rollbackSession.manifest.map((file) => ({
+        ...file,
+        storageKey: `artifacts/${suffix}/${rollbackSession.versionId}/${file.path}`
+      }))
+    }
+  }));
+  assert.equal((await repo.getUploadSessionForOwner(rollbackSession.id, user.id))?.status, "finalizing");
+  assert.equal(await repo.getDeploymentVersion(user.defaultNamespace, rollbackSession.slug), null);
 
   const second = await repo.createDeploymentVersion({
     namespace: user.defaultNamespace,
@@ -276,9 +310,8 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
 
   assert.equal(second.version.versionNumber, 2);
   const publishedByOwner = await repo.listDeploymentsForUser(user.id);
-  assert.equal(publishedByOwner.length, 1);
-  assert.equal(publishedByOwner[0]?.family.slug, slug);
-  assert.equal(publishedByOwner[0]?.version.id, second.version.id);
+  assert.equal(publishedByOwner.length, 2);
+  assert.equal(publishedByOwner.find((deployment) => deployment.family.slug === slug)?.version.id, second.version.id);
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug))?.version.id, second.version.id);
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug, first.version.id))?.version.id, first.version.id);
   assert.deepEqual(
@@ -289,7 +322,10 @@ export async function expectOpenDropRepositoryContract(repo: OpenDropRepository)
 
   const restored = await repo.restoreDeploymentVersion(user.defaultNamespace, slug, first.version.id, user.id);
   assert.equal(restored.family.latestVersionId, first.version.id);
-  assert.equal((await repo.listDeploymentsForUser(user.id))[0]?.version.id, first.version.id);
+  assert.equal(
+    (await repo.listDeploymentsForUser(user.id)).find((deployment) => deployment.family.slug === slug)?.version.id,
+    first.version.id
+  );
   assert.equal((await repo.getDeploymentVersion(user.defaultNamespace, slug))?.version.id, first.version.id);
   assert.equal((await repo.setDeploymentVisibility(user.defaultNamespace, slug, "public", user.id)).visibility, "public");
 

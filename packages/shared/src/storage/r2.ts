@@ -1,4 +1,4 @@
-import type { ArtifactObject, ArtifactStorage, DirectUploadRequest, PresignedUploadTarget } from "./interface";
+import type { ArtifactObject, ArtifactStorage, DirectUploadCapability } from "./interface";
 import { S3DirectUploadPresigner, type S3DirectUploadPresignerConfig } from "./presigner";
 
 export interface R2ObjectBodyLike {
@@ -24,11 +24,9 @@ export interface R2DirectUploadConfig {
 }
 
 export class R2ArtifactStorage implements ArtifactStorage {
-  readonly directUploadEnabled: boolean;
-  private readonly presigner?: S3DirectUploadPresigner;
+  readonly directUpload?: DirectUploadCapability;
 
   constructor(private bucket: R2BucketLike, directUpload?: R2DirectUploadConfig) {
-    this.directUploadEnabled = Boolean(directUpload);
     if (directUpload) {
       const config: S3DirectUploadPresignerConfig = {
         bucket: directUpload.bucket,
@@ -38,7 +36,8 @@ export class R2ArtifactStorage implements ArtifactStorage {
         secretAccessKey: directUpload.secretAccessKey,
         forcePathStyle: true
       };
-      this.presigner = new S3DirectUploadPresigner(config);
+      const presigner = new S3DirectUploadPresigner(config);
+      this.directUpload = { presignPutObject: (request) => presigner.presignPutObject(request) };
     }
   }
 
@@ -73,8 +72,4 @@ export class R2ArtifactStorage implements ArtifactStorage {
     } while (cursor);
   }
 
-  async presignPutObject(request: DirectUploadRequest): Promise<PresignedUploadTarget> {
-    if (!this.presigner) throw new Error("Direct upload signing is not configured for R2.");
-    return this.presigner.presignPutObject(request);
-  }
 }
