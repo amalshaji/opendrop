@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-07-12
+
+- Add staged, concurrent direct uploads using short-lived presigned URLs, with safe multipart fallback for unsupported servers.
+- Add CLI commands for creating annotation notes, replying to threads, and resolving or reopening feedback.
+- Add npm repository metadata and expanded product documentation.
+
 ## 0.2.0 - 2026-07-10
 
 - Add a deployments workspace for signed-in users to browse their published drops.
